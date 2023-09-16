@@ -1,0 +1,31 @@
+[package]
+name = "api-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.75"
+chrono = { version = "0.4.26", features = ["serde"] }
+diesel = { version = "2", features = ["postgres", "chrono", "extras"] }
+dotenvy = "0.15"
+jsonwebtoken = "8.1.1"
+reqwest = { version = "0.11.20", default-features = false, features = ["json", "rustls-tls"] }
+retronomicon-dto = { path = "../retronomicon-dto" }
+rocket_oauth2 = { version = "0.5.0-rc.2", features = ["hyper_rustls_adapter"] }
+scoped-futures = "0.1.3"
+serde = { version = "1.0.186", features = ["derive"] }
+serde_json = "1.0.64"
+tracing = "0.1.37"
+uuid = { version = "1.4.1", features = ["v4"] }
+
+[dependencies.rocket]
+git = "https://github.com/SergioBenitez/Rocket"
+version = "=0.5.0-rc.3"
+rev = "26a3f00f"
+features = ["json", "secrets",]
+
+[dependencies.rocket_db_pools]
+git = "https://github.com/SergioBenitez/Rocket"
+version = "=0.1.0-rc.3"
+rev = "26a3f00f"
+features = ["diesel_postgres"]

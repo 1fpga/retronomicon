@@ -1,0 +1,6 @@
+{
+  "name": "retronomicon-workspace",
+  "workspaces": [
+    "frontend"
+  ]
+}
