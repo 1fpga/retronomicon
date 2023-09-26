@@ -1,17 +1,19 @@
 SET check_function_bodies = false
 ;
 
-CREATE TYPE user_group_role AS ENUM('owner', 'admin', 'member');
+CREATE TYPE user_team_role AS ENUM('owner', 'admin', 'member');
 
 CREATE DOMAIN slug varchar(255)
     CHECK ( value ~ '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$' )
     CONSTRAINT slug_constraint NOT NULL;
 
 CREATE DOMAIN username varchar(255)
-    CHECK ( value ~ '^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$' );
-
-CREATE DOMAIN displayname varchar(255)
-    CHECK ( value ~ '^[a-zA-Z][A-Za-z0-9 _.-]*$' );
+    CHECK ( value ~ '^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$' )
+    CHECK ( value != 'me' )
+    CHECK ( value != 'root' )
+    CHECK ( value != 'admin' )
+    CHECK ( value != 'owner' )
+;
 
 COMMENT ON DOMAIN slug IS 'A URL compatible path component that is unique.';
 
@@ -81,7 +83,7 @@ CREATE UNIQUE INDEX cores_name_idx ON cores("name");
 COMMENT ON TABLE cores IS
     'Core being able to run a SYSTEM either in software or hardware.';
 
-CREATE TABLE "groups"(
+CREATE TABLE "teams"(
                          id SERIAL PRIMARY KEY NOT NULL,
                          slug slug NOT NULL,
                          "name" varchar NOT NULL,
@@ -89,7 +91,7 @@ CREATE TABLE "groups"(
                          links jsonb
 );
 
-COMMENT ON TABLE "groups" IS 'Group of users that own and manage artifacts.';
+COMMENT ON TABLE "teams" IS 'Team/group of users that own and manage artifacts.';
 
 CREATE TABLE platform_tags(
                               platform_id integer NOT NULL, tag_id integer NOT NULL,
@@ -174,7 +176,7 @@ CREATE UNIQUE INDEX tags_slug_idx ON tags(slug);
 CREATE TABLE users(
                       id SERIAL PRIMARY KEY NOT NULL,
                       username username,
-                      display_name displayname,
+                      display_name varchar(255),
                       avatar_url varchar(255),
 
                       email varchar(255) NOT NULL,
@@ -194,11 +196,12 @@ COMMENT ON TABLE users IS
     'A list of users for the website. If the user does not have a password, it cannot be logged in using the regular username+password scheme (it needs to use OAuth2).'
 ;
 
-CREATE TABLE user_groups(
-                             group_id integer NOT NULL,
-                             user_id integer NOT NULL,
-                             "role" user_group_role NOT NULL,
-                             CONSTRAINT user_groups_pkey PRIMARY KEY(group_id, user_id)
+CREATE TABLE user_teams(
+                             team_id integer NOT NULL REFERENCES "teams",
+                             user_id integer NOT NULL REFERENCES "users",
+                             "role" user_team_role NOT NULL,
+                             invite_from integer REFERENCES "users",
+                             CONSTRAINT user_teams_pkey PRIMARY KEY(team_id, user_id)
 );
 
 ALTER TABLE core_releases
@@ -217,17 +220,9 @@ ALTER TABLE core_releases
     ADD CONSTRAINT core_releases_system_id_fkey
         FOREIGN KEY (system_id) REFERENCES systems (id);
 
-ALTER TABLE user_groups
-    ADD CONSTRAINT user_groups_group_id_fkey
-        FOREIGN KEY (group_id) REFERENCES "groups" (id);
-
-ALTER TABLE user_groups
-    ADD CONSTRAINT user_groups_user_id_fkey
-        FOREIGN KEY (user_id) REFERENCES users (id);
-
 ALTER TABLE cores
     ADD CONSTRAINT cores_owner_id_fkey
-        FOREIGN KEY (owner_id) REFERENCES "groups" (id);
+        FOREIGN KEY (owner_id) REFERENCES "teams" (id);
 
 ALTER TABLE core_tags
     ADD CONSTRAINT core_tags_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES tags (id)
@@ -255,11 +250,11 @@ ALTER TABLE system_tags
 
 ALTER TABLE platforms
     ADD CONSTRAINT platforms_owner_id_fkey
-        FOREIGN KEY (owner_id) REFERENCES "groups" (id);
+        FOREIGN KEY (owner_id) REFERENCES "teams" (id);
 
 ALTER TABLE systems
     ADD CONSTRAINT systems_owner_id_fkey
-        FOREIGN KEY (owner_id) REFERENCES "groups" (id);
+        FOREIGN KEY (owner_id) REFERENCES "teams" (id);
 
 ALTER TABLE core_release_artifacts
     ADD CONSTRAINT core_release_artifacts_core_release_id_fkey
@@ -287,4 +282,4 @@ ALTER TABLE system_release_artifacts
 
 ALTER TABLE core_releases
     ADD CONSTRAINT core_releases_owner_id_fkey
-        FOREIGN KEY (owner_id) REFERENCES "groups" (id);
+        FOREIGN KEY (owner_id) REFERENCES "teams" (id);

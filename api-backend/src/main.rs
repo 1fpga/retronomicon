@@ -1,7 +1,8 @@
 use crate::routes::{GitHubUserInfo, GoogleUserInfo};
 use rocket::figment::value::{Map, Value};
 use rocket::figment::{map, Provider};
-use rocket::{get, http::Status, routes, serde::json::Json};
+use rocket::response::status::NoContent;
+use rocket::{get, http::Status, routes};
 use rocket_db_pools::Database;
 use rocket_oauth2::OAuth2;
 use std::collections::BTreeMap;
@@ -10,20 +11,23 @@ use std::env;
 mod db;
 mod error;
 mod fairings;
+mod guards;
 mod models;
 mod schema;
-mod user;
+mod types;
 
 mod routes;
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct Frontend {
+pub struct RetronomiconConfig {
     pub base_url: String,
+    pub root_team: Vec<String>,
+    pub root_team_id: i32,
 }
 
-#[get("/healthcheck")]
-async fn health_check_handler() -> Result<Json<String>, Status> {
-    Ok(Json("ok".into()))
+#[get("/health")]
+async fn health_handler() -> Result<NoContent, Status> {
+    Ok(NoContent)
 }
 
 fn database_config() -> impl Provider {
@@ -66,24 +70,27 @@ async fn main() -> Result<(), rocket::Error> {
     dotenvy::dotenv().ok();
 
     #[cfg(debug_assertions)]
-    dotenvy::from_filename(".env.development").expect("Failed to load .env.development file");
+    dotenvy::from_filename(".env.development").ok();
 
     let figment = rocket::Config::figment()
         .merge(database_config())
         .merge(oauth_config());
 
     let v = figment.find_value("secret_key").unwrap();
-    env::set_var("JWT_SECRET", v.into_string().unwrap());
+    env::set_var(
+        "JWT_SECRET",
+        v.into_string().expect("Could not find the secret_key."),
+    );
 
     let rocket = rocket::custom(figment);
     let rocket = rocket
-        .mount("/api", routes![health_check_handler])
+        .mount("/api", routes![health_handler])
         .mount("/api", routes::routes())
         .attach(db::RetronomiconDb::init())
         .attach(OAuth2::<GitHubUserInfo>::fairing("github"))
         .attach(OAuth2::<GoogleUserInfo>::fairing("google"))
-        .attach(fairings::cors::CORS)
-        .attach(rocket::fairing::AdHoc::config::<Frontend>());
+        .attach(fairings::cors::Cors)
+        .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 
     rocket.launch().await?;
 

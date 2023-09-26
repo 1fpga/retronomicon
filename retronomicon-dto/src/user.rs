@@ -1,8 +1,41 @@
-use crate::details::GroupRef;
-use rocket::serde::json::Value;
-use rocket::serde::Deserialize;
-use serde::Serialize;
+use crate::teams::TeamRef;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
+
+#[derive(Debug, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UserId<'v> {
+    Id(i32),
+    Username(&'v str),
+}
+
+impl<'v> UserId<'v> {
+    pub fn as_id(&self) -> Option<i32> {
+        match self {
+            UserId::Id(id) => Some(*id),
+            _ => None,
+        }
+    }
+    pub fn as_username(&self) -> Option<&str> {
+        match self {
+            UserId::Username(name) => Some(name),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<'v> rocket::request::FromParam<'v> for UserId<'v> {
+    type Error = std::convert::Infallible;
+
+    fn from_param(param: &'v str) -> Result<Self, Self::Error> {
+        match param.parse::<i32>() {
+            Ok(id) => Ok(UserId::Id(id)),
+            Err(_) => Ok(UserId::Username(param)),
+        }
+    }
+}
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct UserUpdate<'a> {
@@ -29,8 +62,8 @@ pub struct UserDetailsInner {
     pub id: i32,
     pub username: String,
     pub description: String,
-    pub links: Option<Value>,
-    pub metadata: Option<Value>,
+    pub links: Value,
+    pub metadata: Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,7 +71,7 @@ pub struct UserDetails {
     #[serde(flatten)]
     pub user: UserDetailsInner,
 
-    pub groups: Vec<GroupRef>,
+    pub teams: Vec<TeamRef>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

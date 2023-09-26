@@ -13,7 +13,7 @@ function App() {
         .then((res) => res.data)
         .catch(() => null)
         .then((user) => {
-            setUsername(user?.username || null);
+            setUsername(user?.username);
             setDescription(user?.description || "");
         })
   }

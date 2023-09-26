@@ -1,11 +1,12 @@
 use crate::db::Db;
 use crate::error::Error;
-use crate::{models, schema};
+use crate::{guards, models, schema};
 use retronomicon_dto as dto;
 use retronomicon_dto::params::PagingParams;
 use rocket::serde::json::Json;
-use rocket::{get, routes, Route};
+use rocket::{get, post, routes, Route};
 use rocket_db_pools::diesel::prelude::*;
+use serde_json::json;
 
 #[get("/users/?<paging..>")]
 async fn users_(
@@ -31,7 +32,7 @@ async fn users(
         .map(|u| Json(u.into_iter().map(Into::into).collect()))
 }
 
-async fn user_details_from_(
+pub async fn user_details_from_(
     mut db: Db,
     user: models::User,
 ) -> Result<Json<dto::user::UserDetails>, Error> {
@@ -40,54 +41,58 @@ async fn user_details_from_(
         return Err(Error::RecordNotFound);
     }
 
-    let groups = models::UserGroup::belonging_to(&user)
-        .inner_join(schema::groups::table)
-        .select((
-            schema::groups::id,
-            schema::groups::name,
-            schema::groups::slug,
-        ))
+    let teams = models::UserTeam::belonging_to(&user)
+        .inner_join(schema::teams::table)
+        .select((schema::teams::id, schema::teams::name, schema::teams::slug))
         .load(&mut db)
         .await?
         .into_iter()
-        .map(|(id, name, slug)| dto::details::GroupRef { id, name, slug })
+        .map(|(id, name, slug)| dto::teams::TeamRef { id, name, slug })
         .collect();
 
     Ok(Json(dto::user::UserDetails {
-        groups,
+        teams,
         user: dto::user::UserDetailsInner {
             id: user.id,
             username: username.clone(),
             description: user.description,
-            links: user.links,
-            metadata: user.metadata,
+            links: user.links.unwrap_or_else(|| json!({})),
+            metadata: user.metadata.unwrap_or_else(|| json!({})),
         },
     }))
 }
 
-#[get("/users/<id>", rank = 1)]
-async fn users_details_id(mut db: Db, id: i32) -> Result<Json<dto::user::UserDetails>, Error> {
-    let user = schema::users::table
-        .filter(schema::users::id.eq(id))
-        .first::<models::User>(&mut db)
-        .await?;
+#[get("/users/<id>")]
+async fn users_id(
+    mut db: Db,
+    id: dto::user::UserId<'_>,
+) -> Result<Json<dto::user::UserDetails>, Error> {
+    let user = models::User::from_userid(&mut db, id).await?;
 
     user_details_from_(db, user).await
 }
 
-#[get("/users/<username>", rank = 2)]
-async fn users_details_slug(
+/// Only root users can update other users.
+#[post(
+    "/users/<id>/update",
+    rank = 1,
+    format = "application/json",
+    data = "<form>"
+)]
+async fn users_id_update(
     mut db: Db,
-    username: String,
-) -> Result<Json<dto::user::UserDetails>, Error> {
-    let user = schema::users::table
-        .filter(schema::users::username.eq(&Some(username)))
-        .first::<models::User>(&mut db)
-        .await?;
+    _root_user: guards::users::RootUserGuard,
+    id: dto::user::UserId<'_>,
+    form: Json<dto::user::UserUpdate<'_>>,
+) -> Result<Json<dto::Ok>, Error> {
+    let user = models::User::from_userid(&mut db, id).await?;
+    let user_guard = guards::users::UserGuard::from_model(user);
 
-    user_details_from_(db, user).await
+    user_guard.update(&mut db, form.into_inner()).await?;
+
+    Ok(Json(dto::Ok))
 }
 
 pub fn routes() -> Vec<Route> {
-    routes![users_, users, users_details_id, users_details_slug]
+    routes![users_, users, users_id, users_id_update]
 }

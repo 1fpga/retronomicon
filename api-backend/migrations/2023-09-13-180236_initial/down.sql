@@ -1,6 +1,6 @@
 -- These are done in this weird order to avoid dependencies error.
 
-DROP TABLE user_groups;
+DROP TABLE user_teams;
 DROP INDEX users_username_idx;
 DROP INDEX tags_slug_idx;
 DROP TABLE system_tags;
@@ -25,9 +25,8 @@ DROP TABLE tags;
 DROP TABLE "users";
 DROP TABLE "systems";
 DROP TABLE platforms;
-DROP TABLE "groups";
+DROP TABLE "teams";
 
 DROP DOMAIN slug;
 DROP DOMAIN username;
-DROP DOMAIN displayname;
-DROP TYPE user_group_role;
+DROP TYPE user_team_role;

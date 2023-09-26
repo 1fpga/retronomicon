@@ -1,4 +1,3 @@
-use rocket::http::Status;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -7,8 +6,9 @@ pub struct JsonError {
     message: String,
 }
 
-impl From<(Status, String)> for JsonError {
-    fn from((status, message): (Status, String)) -> Self {
+#[cfg(feature = "rocket")]
+impl From<(rocket::http::Status, String)> for JsonError {
+    fn from((status, message): (rocket::http::Status, String)) -> Self {
         JsonError {
             status: status.to_string(),
             message,

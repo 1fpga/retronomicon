@@ -1,7 +1,7 @@
 pub mod error;
 pub mod params;
 
-pub mod details;
+pub mod teams;
 pub mod user;
 
 /// The expected response of an end point that does not return anything.

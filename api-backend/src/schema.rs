@@ -2,8 +2,8 @@
 
 pub mod sql_types {
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "user_group_role"))]
-    pub struct UserGroupRole;
+    #[diesel(postgres_type(name = "user_team_role"))]
+    pub struct UserTeamRole;
 }
 
 diesel::table! {
@@ -59,17 +59,6 @@ diesel::table! {
         metadata -> Nullable<Jsonb>,
         links -> Nullable<Jsonb>,
         owner_id -> Int4,
-    }
-}
-
-diesel::table! {
-    groups (id) {
-        id -> Int4,
-        #[max_length = 255]
-        slug -> Varchar,
-        name -> Varchar,
-        description -> Text,
-        links -> Nullable<Jsonb>,
     }
 }
 
@@ -148,13 +137,25 @@ diesel::table! {
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::UserGroupRole;
+    teams (id) {
+        id -> Int4,
+        #[max_length = 255]
+        slug -> Varchar,
+        name -> Varchar,
+        description -> Text,
+        links -> Nullable<Jsonb>,
+    }
+}
 
-    user_groups (group_id, user_id) {
-        group_id -> Int4,
+diesel::table! {
+    use diesel::sql_types::*;
+    use super::sql_types::UserTeamRole;
+
+    user_teams (team_id, user_id) {
+        team_id -> Int4,
         user_id -> Int4,
-        role -> UserGroupRole,
+        role -> UserTeamRole,
+        invite_from -> Nullable<Int4>,
     }
 }
 
@@ -182,25 +183,24 @@ diesel::table! {
 diesel::joinable!(core_release_artifacts -> artifacts (artifact_id));
 diesel::joinable!(core_release_artifacts -> core_releases (core_release_id));
 diesel::joinable!(core_releases -> cores (core_id));
-diesel::joinable!(core_releases -> groups (owner_id));
 diesel::joinable!(core_releases -> platforms (platform_id));
 diesel::joinable!(core_releases -> systems (system_id));
+diesel::joinable!(core_releases -> teams (owner_id));
 diesel::joinable!(core_releases -> users (uploader_id));
 diesel::joinable!(core_tags -> cores (core_id));
 diesel::joinable!(core_tags -> tags (tag_id));
-diesel::joinable!(cores -> groups (owner_id));
+diesel::joinable!(cores -> teams (owner_id));
 diesel::joinable!(platform_tags -> platforms (platform_id));
 diesel::joinable!(platform_tags -> tags (tag_id));
-diesel::joinable!(platforms -> groups (owner_id));
+diesel::joinable!(platforms -> teams (owner_id));
 diesel::joinable!(system_release_artifacts -> artifacts (artifact_id));
 diesel::joinable!(system_release_artifacts -> system_releases (system_file_release_id));
 diesel::joinable!(system_releases -> systems (system_id));
 diesel::joinable!(system_releases -> users (user_id));
 diesel::joinable!(system_tags -> systems (system_id));
 diesel::joinable!(system_tags -> tags (tag_id));
-diesel::joinable!(systems -> groups (owner_id));
-diesel::joinable!(user_groups -> groups (group_id));
-diesel::joinable!(user_groups -> users (user_id));
+diesel::joinable!(systems -> teams (owner_id));
+diesel::joinable!(user_teams -> teams (team_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     artifacts,
@@ -208,7 +208,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     core_releases,
     core_tags,
     cores,
-    groups,
     platform_tags,
     platforms,
     system_release_artifacts,
@@ -216,6 +215,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     system_tags,
     systems,
     tags,
-    user_groups,
+    teams,
+    user_teams,
     users,
 );

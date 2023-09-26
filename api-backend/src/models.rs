@@ -8,10 +8,17 @@ use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
+use retronomicon_dto as dto;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
+
+pub mod users;
+pub use users::User;
+
+pub mod teams;
+pub use teams::Team;
 
 #[derive(Queryable, Debug, Selectable, Identifiable, Serialize, Deserialize)]
 pub struct Artifact {
@@ -63,25 +70,6 @@ pub struct CoreReleaseArtifact {
 pub struct CoreTag {
     pub core_id: i32,
     pub tag_id: i32,
-}
-
-#[derive(Queryable, Debug, Identifiable, Selectable, Serialize)]
-pub struct Group {
-    pub id: i32,
-    pub slug: String,
-    pub name: String,
-    pub description: String,
-    pub links: Option<Json>,
-}
-
-impl From<Group> for retronomicon_dto::details::GroupRef {
-    fn from(value: Group) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            slug: value.slug,
-        }
-    }
 }
 
 #[derive(Queryable, Debug, Identifiable, Serialize)]
@@ -150,46 +138,15 @@ pub struct Tag {
     pub color: i32,
 }
 
-#[derive(Queryable, Debug, Identifiable, Selectable, Serialize)]
-pub struct User {
-    pub id: i32,
-
-    pub username: Option<String>,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-
-    pub email: String,
-    #[serde(skip_serializing)]
-    pub auth_provider: Option<String>,
-
-    pub need_reset: bool,
-    pub deleted: bool,
-
-    pub description: String,
-    pub links: Option<Json>,
-    pub metadata: Option<Json>,
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, FromSqlRow, AsExpression)]
+#[diesel(sql_type = sql_types::UserTeamRole)]
+pub enum UserTeamRole {
+    Owner = 2,
+    Admin = 1,
+    Member = 0,
 }
 
-impl From<User> for retronomicon_dto::user::User {
-    fn from(value: User) -> Self {
-        Self {
-            id: value.id,
-            username: value.username,
-            display_name: value.display_name,
-            avatar_url: value.avatar_url,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, FromSqlRow, AsExpression, Eq)]
-#[diesel(sql_type = sql_types::UserGroupRole)]
-pub enum UserGroupRole {
-    Owner,
-    Admin,
-    Member,
-}
-
-impl ToSql<sql_types::UserGroupRole, Pg> for UserGroupRole {
+impl ToSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
         match *self {
             Self::Owner => out.write_all(b"owner")?,
@@ -200,7 +157,7 @@ impl ToSql<sql_types::UserGroupRole, Pg> for UserGroupRole {
     }
 }
 
-impl FromSql<sql_types::UserGroupRole, Pg> for UserGroupRole {
+impl FromSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
     fn from_sql(bytes: PgValue<'_>) -> diesel::deserialize::Result<Self> {
         match bytes.as_bytes() {
             b"owner" => Ok(Self::Owner),
@@ -211,12 +168,33 @@ impl FromSql<sql_types::UserGroupRole, Pg> for UserGroupRole {
     }
 }
 
+impl From<UserTeamRole> for dto::teams::UserTeamRole {
+    fn from(value: UserTeamRole) -> Self {
+        match value {
+            UserTeamRole::Owner => Self::Owner,
+            UserTeamRole::Admin => Self::Admin,
+            UserTeamRole::Member => Self::Member,
+        }
+    }
+}
+
+impl From<dto::teams::UserTeamRole> for UserTeamRole {
+    fn from(value: dto::teams::UserTeamRole) -> Self {
+        match value {
+            dto::teams::UserTeamRole::Owner => Self::Owner,
+            dto::teams::UserTeamRole::Admin => Self::Admin,
+            dto::teams::UserTeamRole::Member => Self::Member,
+        }
+    }
+}
+
 #[derive(Queryable, Debug, Identifiable, Selectable, Associations)]
-#[diesel(belongs_to(Group))]
+#[diesel(belongs_to(Team))]
 #[diesel(belongs_to(User))]
-#[diesel(primary_key(group_id, user_id))]
-pub struct UserGroup {
-    pub group_id: i32,
+#[diesel(primary_key(team_id, user_id))]
+pub struct UserTeam {
+    pub team_id: i32,
     pub user_id: i32,
-    pub role: UserGroupRole,
+    pub role: UserTeamRole,
+    pub invite_from: Option<i32>,
 }

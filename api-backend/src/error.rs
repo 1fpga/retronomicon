@@ -7,6 +7,7 @@ pub enum Error {
     Request(String),
     Database(String),
     RecordNotFound,
+    Unauthorized,
 }
 
 impl ToString for Error {
@@ -15,6 +16,7 @@ impl ToString for Error {
             Error::Request(message) => message.clone(),
             Error::Database(message) => message.clone(),
             Error::RecordNotFound => "Record not found".to_string(),
+            Error::Unauthorized => "Unauthorized".to_string(),
         }
     }
 }
@@ -25,6 +27,7 @@ impl<'a> rocket::response::Responder<'a, 'a> for Error {
             Error::Request(_) => Status::BadRequest,
             Error::Database(_) => Status::InternalServerError,
             Error::RecordNotFound => Status::NotFound,
+            Error::Unauthorized => Status::Unauthorized,
         };
 
         let json = JsonError::from((status, self.to_string()));

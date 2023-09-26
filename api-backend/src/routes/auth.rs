@@ -1,6 +1,7 @@
 use crate::db::Db;
-use crate::user::User;
-use crate::Frontend;
+use crate::guards::users::UserGuard;
+use crate::models;
+use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
 use diesel::OptionalExtension;
 use reqwest::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
@@ -9,11 +10,13 @@ use rocket::http::CookieJar;
 use rocket::response::{Debug, Redirect};
 use rocket::serde::json::Json;
 use rocket::{get, post, routes, Route, State};
+use rocket_db_pools::diesel::AsyncConnection;
 use rocket_oauth2::{OAuth2, TokenResponse};
+use scoped_futures::ScopedFutureExt;
 use serde_json::{self, Value};
 
 #[post("/me/token")]
-async fn me_token(user: User) -> Result<Json<AuthTokenResponse>, String> {
+async fn me_token(user: UserGuard) -> Result<Json<AuthTokenResponse>, String> {
     user.create_jwt()
         .map(|token| Json(AuthTokenResponse { token }))
         .map_err(|e| e.to_string())
@@ -22,32 +25,54 @@ async fn me_token(user: User) -> Result<Json<AuthTokenResponse>, String> {
 async fn login_(
     mut db: Db,
     cookies: &CookieJar<'_>,
-    frontend_config: &State<Frontend>,
+    config: &State<RetronomiconConfig>,
     username: Option<String>,
-    email: String,
+    email: &str,
+    auth_provider: &str,
 ) -> Result<Redirect, Debug<Error>> {
-    let user = User::login_from_auth(&mut db, username, email.clone(), "google".to_string(), None)
-        .await
-        .optional()
-        .expect("failed to create user");
+    let add_to_root = config.root_team.iter().any(|u| u == email);
 
-    let user = if let Some(user) = user {
-        user
-    } else {
-        let maybe_user = User::login_from_auth(&mut db, None, email, "google".to_string(), None)
-            .await
-            .optional()
-            .expect("failed to create user");
-        if maybe_user.is_none() {
-            return Err(Debug(Error::msg("failed to create user")));
+    db.transaction::<Redirect, diesel::result::Error, _>(|db| {
+        async move {
+            let maybe_user =
+                UserGuard::login_from_auth(db, username, email, auth_provider.to_string(), None)
+                    .await
+                    .optional()?;
+
+            let user = if let Some((created, model, user)) = maybe_user {
+                if created && add_to_root {
+                    model
+                        .add_team(db, config.root_team_id, models::UserTeamRole::Owner)
+                        .await?;
+                }
+                user
+            } else {
+                let maybe_user =
+                    UserGuard::login_from_auth(db, None, email, auth_provider.to_string(), None)
+                        .await
+                        .optional()?;
+                if let Some((created, model, user)) = maybe_user {
+                    if created && add_to_root {
+                        model
+                            .add_team(db, config.root_team_id, models::UserTeamRole::Owner)
+                            .await?;
+                    }
+                    user
+                } else {
+                    return Err(diesel::result::Error::NotFound);
+                }
+            };
+
+            user.update_cookie(cookies);
+
+            let base_url = config.base_url.clone();
+            Ok(Redirect::to(base_url))
         }
-        maybe_user.unwrap()
-    };
-
-    user.update_cookie(cookies);
-
-    let base_url = frontend_config.base_url.clone();
-    Ok(Redirect::to(base_url))
+        .scope_boxed()
+    })
+    .await
+    .context("Adding team")
+    .map_err(Debug)
 }
 
 /// User information to be retrieved from the GitHub API.
@@ -71,7 +96,7 @@ async fn github_callback(
     db: Db,
     token: TokenResponse<GitHubUserInfo>,
     cookies: &CookieJar<'_>,
-    frontend_config: &State<Frontend>,
+    config: &State<RetronomiconConfig>,
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
@@ -93,9 +118,10 @@ async fn github_callback(
     login_(
         db,
         cookies,
-        frontend_config,
+        config,
         Some(user_info.login),
-        user_info.email,
+        &user_info.email,
+        "github",
     )
     .await
 }
@@ -122,7 +148,7 @@ async fn google_callback(
     db: Db,
     token: TokenResponse<GoogleUserInfo>,
     cookies: &CookieJar<'_>,
-    frontend_config: &State<Frontend>,
+    frontend_config: &State<RetronomiconConfig>,
 ) -> Result<Redirect, Debug<Error>> {
     let json: serde_json::Value = reqwest::Client::builder()
         .build()
@@ -140,16 +166,17 @@ async fn google_callback(
     let user_info: GoogleUserInfo = serde_json::from_str(&json.to_string()).unwrap();
     let email = user_info.email_addresses[0]
         .get("value")
-        .map(|e| e.to_string());
-    if email.is_none() {
-        return Err(Debug(Error::msg("failed to get email")));
-    }
+        .and_then(|e| e.as_str());
 
-    login_(db, cookies, frontend_config, None, email.unwrap()).await
+    if let Some(email) = email {
+        login_(db, cookies, frontend_config, None, email, "google").await
+    } else {
+        Err(Debug(Error::msg("failed to get email")))
+    }
 }
 
 #[get("/logout")]
-fn logout(cookies: &CookieJar<'_>, user: User) -> Redirect {
+fn logout(cookies: &CookieJar<'_>, user: UserGuard) -> Redirect {
     user.remove_cookie(cookies);
     Redirect::to("/")
 }

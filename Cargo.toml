@@ -4,7 +4,9 @@ members = [
     "retronomicon-cli",
     "retronomicon-dto",
 ]
-resolver = "2"
+resolver = "1"
 
 [patch.crates-io]
 rocket = { git = "https://github.com/SergioBenitez/Rocket", version = "=0.5.0-rc.3", rev = "26a3f00f" }
+rocket_http = { git = "https://github.com/SergioBenitez/Rocket", version = "=0.5.0-rc.3", rev = "26a3f00f" }
+rocket_codegen = { git = "https://github.com/SergioBenitez/Rocket", version = "=0.5.0-rc.3", rev = "26a3f00f" }
