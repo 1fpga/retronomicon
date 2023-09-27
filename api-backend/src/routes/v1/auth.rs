@@ -5,22 +5,14 @@ use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
 use diesel::OptionalExtension;
 use reqwest::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
-use retronomicon_dto::AuthTokenResponse;
 use rocket::http::CookieJar;
 use rocket::response::{Debug, Redirect};
-use rocket::serde::json::Json;
-use rocket::{get, post, routes, Route, State};
+use rocket::{get, State};
 use rocket_db_pools::diesel::AsyncConnection;
 use rocket_oauth2::{OAuth2, TokenResponse};
+use rocket_okapi::openapi;
 use scoped_futures::ScopedFutureExt;
 use serde_json::{self, Value};
-
-#[post("/me/token")]
-async fn me_token(user: UserGuard) -> Result<Json<AuthTokenResponse>, String> {
-    user.create_jwt()
-        .map(|token| Json(AuthTokenResponse { token }))
-        .map_err(|e| e.to_string())
-}
 
 async fn login_(
     mut db: Db,
@@ -82,17 +74,23 @@ pub struct GitHubUserInfo {
     email: String,
 }
 
+/// Login using GitHub with OAuth2. This will redirect the user to GitHub's login
+/// page. If the user accepts the request, GitHub will redirect the user back to
+/// the callback URL specified in the OAuth2 configuration.
+///
+/// This is not a REST endpoint, but a normal web page.
 // NB: Here we are using the same struct as a type parameter to OAuth2 and
 // TokenResponse as we use for the user's GitHub login details. For
 // `TokenResponse` and `OAuth2` the actual type does not matter; only that they
 // are matched up.
+#[openapi(tag = "Authentication", ignore = "oauth2")]
 #[get("/login/github")]
-fn github_login(oauth2: OAuth2<GitHubUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
+pub async fn github_login(oauth2: OAuth2<GitHubUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
     oauth2.get_redirect(cookies, &["user:read"]).unwrap()
 }
 
 #[get("/auth/github")]
-async fn github_callback(
+pub async fn github_callback(
     db: Db,
     token: TokenResponse<GitHubUserInfo>,
     cookies: &CookieJar<'_>,
@@ -136,15 +134,21 @@ pub struct GoogleUserInfo {
     email_addresses: Vec<Value>,
 }
 
+/// Login using Google with OAuth2. This will redirect the user to GitHub's login
+/// page. If the user accepts the request, GitHub will redirect the user back to
+/// the callback URL specified in the OAuth2 configuration.
+///
+/// This is not a REST endpoint, but a normal web page.
+#[openapi(tag = "Authentication", ignore = "oauth2")]
 #[get("/login/google")]
-fn google_login(oauth2: OAuth2<GoogleUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
+pub async fn google_login(oauth2: OAuth2<GoogleUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
     oauth2
         .get_redirect(cookies, &["profile", "email", "openid"])
         .unwrap()
 }
 
 #[get("/auth/google")]
-async fn google_callback(
+pub async fn google_callback(
     db: Db,
     token: TokenResponse<GoogleUserInfo>,
     cookies: &CookieJar<'_>,
@@ -175,19 +179,15 @@ async fn google_callback(
     }
 }
 
+/// Logout the current user.
+#[openapi(tag = "Authentication")]
 #[get("/logout")]
-fn logout(cookies: &CookieJar<'_>, user: UserGuard) -> Redirect {
+pub async fn logout(
+    cookies: &CookieJar<'_>,
+    config: &State<RetronomiconConfig>,
+    user: UserGuard,
+) -> Redirect {
     user.remove_cookie(cookies);
-    Redirect::to("/")
-}
-
-pub fn routes() -> Vec<Route> {
-    routes![
-        me_token,
-        logout,
-        github_callback,
-        google_callback,
-        github_login,
-        google_login,
-    ]
+    let base_url = config.base_url.clone();
+    Redirect::to(base_url)
 }

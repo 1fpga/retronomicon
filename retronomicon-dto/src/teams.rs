@@ -1,8 +1,9 @@
-use crate::user::{UserId, UserRef};
+use crate::user::{UserIdOrUsername, UserRef};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct TeamRef {
     pub id: i32,
     pub name: String,
@@ -10,12 +11,25 @@ pub struct TeamRef {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct Team {
+    #[serde(flatten)]
+    pub team: TeamRef,
+
+    pub description: String,
+    pub links: Value,
+    pub metadata: Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct TeamDetails {
     #[serde(flatten)]
     pub team: TeamRef,
 
     pub description: String,
-    pub links: Option<Value>,
+    pub links: Value,
+    pub metadata: Value,
 
     pub users: Vec<UserRef>,
 }
@@ -23,6 +37,7 @@ pub struct TeamDetails {
 #[derive(
     Copy, Clone, Debug, Default, Serialize, Deserialize, strum::EnumString, strum::Display,
 )]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum UserTeamRole {
     Owner,
     Admin,
@@ -31,9 +46,10 @@ pub enum UserTeamRole {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct TeamInvite<'a> {
     #[serde(borrow)]
-    pub user: UserId<'a>,
+    pub user: UserIdOrUsername<'a>,
 
     #[serde(default)]
     pub role: UserTeamRole,

@@ -16,12 +16,11 @@ use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::request;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedFutureExt;
-use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
-#[derive(Clone, Debug, Queryable, Identifiable, Selectable, Serialize)]
+#[derive(Clone, Debug, Queryable, Identifiable, Selectable)]
 pub struct User {
     pub id: i32,
 
@@ -30,7 +29,6 @@ pub struct User {
     pub avatar_url: Option<String>,
 
     pub email: String,
-    #[serde(skip_serializing)]
     pub auth_provider: Option<String>,
 
     pub need_reset: bool,
@@ -69,11 +67,11 @@ impl User {
 
     pub async fn from_userid(
         db: &mut Db,
-        user_id: dto::user::UserId<'_>,
+        user_id: dto::user::UserIdOrUsername<'_>,
     ) -> Result<Self, diesel::result::Error> {
         match user_id {
-            dto::user::UserId::Id(id) => Self::from_id(db, id).await,
-            dto::user::UserId::Username(name) => Self::from_username(db, &name).await,
+            dto::user::UserIdOrUsername::Id(id) => Self::from_id(db, id).await,
+            dto::user::UserIdOrUsername::Username(name) => Self::from_username(db, &name).await,
         }
     }
 

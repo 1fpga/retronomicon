@@ -132,7 +132,7 @@ diesel::table! {
         #[max_length = 255]
         slug -> Varchar,
         description -> Nullable<Text>,
-        color -> Int4,
+        color -> Int8,
     }
 }
 
@@ -144,6 +144,7 @@ diesel::table! {
         name -> Varchar,
         description -> Text,
         links -> Nullable<Jsonb>,
+        metadata -> Nullable<Jsonb>,
     }
 }
 

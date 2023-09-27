@@ -2,11 +2,13 @@
 name = "api-backend"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.75"
 chrono = { version = "0.4.26", features = ["serde"] }
 diesel = { version = "2", features = ["postgres", "chrono", "extras"] }
+diesel_migrations = "2.1"
 dotenvy = "0.15"
 jsonwebtoken = "8.1.1"
 reqwest = { version = "0.11.20", default-features = false, features = ["json", "rustls-tls"] }

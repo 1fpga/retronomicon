@@ -1,15 +1,18 @@
-use crate::routes::{GitHubUserInfo, GoogleUserInfo};
+use crate::db::run_migrations;
+use crate::routes::v1;
 use rocket::figment::value::{Map, Value};
 use rocket::figment::{map, Provider};
 use rocket::response::status::NoContent;
 use rocket::{get, http::Status, routes};
 use rocket_db_pools::Database;
 use rocket_oauth2::OAuth2;
+use rocket_okapi::rapidoc::{make_rapidoc, GeneralConfig, HideShowConfig, RapiDocConfig};
+use rocket_okapi::settings::UrlObject;
+use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
 use std::collections::BTreeMap;
 use std::env;
 
 mod db;
-mod error;
 mod fairings;
 mod guards;
 mod models;
@@ -72,6 +75,8 @@ async fn main() -> Result<(), rocket::Error> {
     #[cfg(debug_assertions)]
     dotenvy::from_filename(".env.development").ok();
 
+    run_migrations();
+
     let figment = rocket::Config::figment()
         .merge(database_config())
         .merge(oauth_config());
@@ -84,11 +89,35 @@ async fn main() -> Result<(), rocket::Error> {
 
     let rocket = rocket::custom(figment);
     let rocket = rocket
+        // The health endpoint.
         .mount("/api", routes![health_handler])
-        .mount("/api", routes::routes())
+        // The v1 actual API endpoints.
+        .mount("/api/v1", v1::routes())
+        .mount(
+            "/api/swagger",
+            make_swagger_ui(&SwaggerUIConfig {
+                url: "/api/v1/openapi.json".to_owned(),
+                ..Default::default()
+            }),
+        )
+        .mount(
+            "/api/rapidoc/",
+            make_rapidoc(&RapiDocConfig {
+                general: GeneralConfig {
+                    spec_urls: vec![UrlObject::new("General", "../openapi.json")],
+                    ..Default::default()
+                },
+                hide_show: HideShowConfig {
+                    allow_spec_url_load: false,
+                    allow_spec_file_load: false,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+        )
         .attach(db::RetronomiconDb::init())
-        .attach(OAuth2::<GitHubUserInfo>::fairing("github"))
-        .attach(OAuth2::<GoogleUserInfo>::fairing("google"))
+        .attach(OAuth2::<v1::GitHubUserInfo>::fairing("github"))
+        .attach(OAuth2::<v1::GoogleUserInfo>::fairing("google"))
         .attach(fairings::cors::Cors)
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 

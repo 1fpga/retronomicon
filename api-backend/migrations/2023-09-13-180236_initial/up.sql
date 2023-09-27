@@ -27,7 +27,10 @@ CREATE TABLE artifacts(
 );
 
 COMMENT ON TABLE artifacts IS
-    'Artifact (a file). There might be multiple per release/core/systems (e.g. a source tree, or a file that needs to accompany the release). Download URL can be NULL for artifacts we only know through their checksums.'
+    'Artifact (a file). There might be multiple per release/core/systems\n'
+    '(e.g. a source tree, or a file that needs to accompany the release).\n'
+    'Download URL can be NULL for artifacts we only know through their\n'
+    'checksums.'
 ;
 
 CREATE TABLE core_release_artifacts(
@@ -88,7 +91,8 @@ CREATE TABLE "teams"(
                          slug slug NOT NULL,
                          "name" varchar NOT NULL,
                          description text NOT NULL,
-                         links jsonb
+                         links jsonb,
+                         metadata jsonb
 );
 
 COMMENT ON TABLE "teams" IS 'Team/group of users that own and manage artifacts.';
@@ -113,12 +117,13 @@ CREATE UNIQUE INDEX platforms_slug_idx ON platforms(slug);
 CREATE UNIQUE INDEX platforms_name_idx ON platforms("name");
 
 COMMENT ON TABLE platforms IS
-    'The platform that supports running Cores, e.g. "openFPGA" or "MiSTer-de10".';
+    'The platform that supports running Cores, e.g. "openFPGA" or \n'
+    '"MiSTer-de10".';
 
 CREATE TABLE system_release_artifacts(
-                                         system_file_release_id integer NOT NULL, artifact_id integer NOT NULL,
-                                         CONSTRAINT system_release_artifacts_pkey PRIMARY KEY
-                                             (artifact_id, system_file_release_id)
+    system_file_release_id integer NOT NULL, artifact_id integer NOT NULL,
+    CONSTRAINT system_release_artifacts_pkey PRIMARY KEY
+        (artifact_id, system_file_release_id)
 );
 
 CREATE TABLE system_releases(
@@ -138,7 +143,8 @@ CREATE UNIQUE INDEX system_releases_version_idx ON system_releases
     ("version" DESC);
 
 COMMENT ON TABLE system_releases IS
-    'Downloadable release of system''s artifacts (e.g. a BIOS). These are platform and core independent.'
+    'Downloadable release of system''s artifacts (e.g. a BIOS). These are\n'
+    'platform and core independent.'
 ;
 
 CREATE TABLE system_tags(
@@ -168,7 +174,7 @@ CREATE TABLE tags(
                      id SERIAL PRIMARY KEY NOT NULL,
                      slug slug NOT NULL,
                      description text,
-                     color integer NOT NULL
+                     color INT8 NOT NULL
 );
 
 CREATE UNIQUE INDEX tags_slug_idx ON tags(slug);
@@ -193,7 +199,9 @@ CREATE TABLE users(
 CREATE UNIQUE INDEX users_username_idx ON users(username);
 
 COMMENT ON TABLE users IS
-    'A list of users for the website. If the user does not have a password, it cannot be logged in using the regular username+password scheme (it needs to use OAuth2).'
+    'A list of users for the website. If the user does not have a password,\n'
+    'it cannot be logged in using the regular username+password scheme (it\n'
+    'needs to use OAuth2).'
 ;
 
 CREATE TABLE user_teams(

@@ -1,0 +1,212 @@
+@startuml
+hide circle
+skinparam linetype ortho
+
+entity "**artifacts**" {
+  Artifact (a file). There might be multiple per release/core/systems\n(e.g. a source tree, or a file that needs to accompany the release).\nDownload URL can be NULL for artifacts we only know through their\nchecksums.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""filename"": //character varying //
+  ""sha256"": //bytea //
+  ""sha512"": //bytea //
+  *""size"": //integer //
+  ""download_url"": //character varying //
+}
+
+entity "**core_release_artifacts**" {
+  + ""core_release_id"": //integer [PK][FK]//
+  + ""artifact_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**core_releases**" {
+  Downloadable release of a core.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""version"": //character varying //
+  ""note"": //text //
+  ""date_released"": //timestamp without time zone //
+  *""date_uploaded"": //timestamp without time zone //
+  ""prerelease"": //boolean //
+  ""yanked"": //boolean //
+  ""links"": //jsonb //
+  *""uploader_id"": //integer [FK]//
+  *""core_id"": //integer [FK]//
+  *""platform_id"": //integer [FK]//
+  *""system_id"": //integer [FK]//
+  *""owner_id"": //integer [FK]//
+}
+
+entity "**core_tags**" {
+  + ""core_id"": //integer [PK][FK]//
+  + ""tag_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**cores**" {
+  Core being able to run a SYSTEM either in software or hardware.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""slug"": //slug //
+  *""name"": //character varying //
+  *""description"": //text //
+  ""metadata"": //jsonb //
+  ""links"": //jsonb //
+  *""owner_id"": //integer [FK]//
+}
+
+entity "**platform_tags**" {
+  + ""platform_id"": //integer [PK][FK]//
+  + ""tag_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**platforms**" {
+  The platform that supports running Cores, e.g. &#34;openFPGA&#34; or \n&#34;MiSTer-de10&#34;.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""slug"": //slug //
+  *""name"": //character varying(255) //
+  *""description"": //text //
+  ""links"": //jsonb //
+  ""metadata"": //jsonb //
+  *""owner_id"": //integer [FK]//
+}
+
+entity "**system_release_artifacts**" {
+  + ""system_file_release_id"": //integer [PK][FK]//
+  + ""artifact_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**system_releases**" {
+  Downloadable release of system&#39;s artifacts (e.g. a BIOS). These are\nplatform and core independent.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""version"": //character varying //
+  ""note"": //text //
+  ""date_released"": //timestamp without time zone //
+  *""date_uploaded"": //timestamp without time zone //
+  ""prerelease"": //integer //
+  ""yanked"": //boolean //
+  ""links"": //jsonb //
+  *""user_id"": //integer [FK]//
+  *""system_id"": //integer [FK]//
+}
+
+entity "**system_tags**" {
+  + ""system_id"": //integer [PK][FK]//
+  + ""tag_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**systems**" {
+  A hardware target system, e.g. &#34;NES&#34; or &#34;Arcade-TMNT&#34;.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""slug"": //slug //
+  *""name"": //character varying //
+  *""description"": //text //
+  *""manufacturer"": //character varying //
+  ""links"": //jsonb //
+  ""metadata"": //jsonb //
+  *""owner_id"": //integer [FK]//
+}
+
+entity "**tags**" {
+  + ""id"": //serial [PK]//
+  --
+  *""slug"": //slug //
+  ""description"": //text //
+  *""color"": //bigint //
+}
+
+entity "**teams**" {
+  Team/group of users that own and manage artifacts.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""slug"": //slug //
+  *""name"": //character varying //
+  *""description"": //text //
+  ""links"": //jsonb //
+  ""metadata"": //jsonb //
+}
+
+entity "**user_teams**" {
+  + ""team_id"": //integer [PK][FK]//
+  + ""user_id"": //integer [PK][FK]//
+  --
+  *""role"": //user_team_role //
+  ""invite_from"": //integer [FK]//
+}
+
+entity "**users**" {
+  A list of users for the website. If the user does not have a password,\nit cannot be logged in using the regular username&#43;password scheme (it\nneeds to use OAuth2).
+  ..
+  + ""id"": //serial [PK]//
+  --
+  ""username"": //username //
+  ""display_name"": //character varying(255) //
+  ""avatar_url"": //character varying(255) //
+  *""email"": //character varying(255) //
+  ""auth_provider"": //character varying(255) //
+  *""need_reset"": //boolean //
+  *""deleted"": //boolean //
+  *""description"": //text //
+  ""links"": //jsonb //
+  ""metadata"": //jsonb //
+}
+
+"**core_release_artifacts**"   }--  "**artifacts**"
+
+"**core_release_artifacts**"   }--  "**core_releases**"
+
+"**core_releases**"   }--  "**cores**"
+
+"**core_releases**"   }--  "**teams**"
+
+"**core_releases**"   }--  "**platforms**"
+
+"**core_releases**"   }--  "**systems**"
+
+"**core_releases**"   }--  "**users**"
+
+"**core_tags**"   }--  "**cores**"
+
+"**core_tags**"   }--  "**tags**"
+
+"**cores**"   }--  "**teams**"
+
+"**platform_tags**"   }--  "**platforms**"
+
+"**platform_tags**"   }--  "**tags**"
+
+"**platforms**"   }--  "**teams**"
+
+"**system_release_artifacts**"   }--  "**artifacts**"
+
+"**system_release_artifacts**"   }--  "**system_releases**"
+
+"**system_releases**"   }--  "**systems**"
+
+"**system_releases**"   }--  "**users**"
+
+"**system_tags**"   }--  "**systems**"
+
+"**system_tags**"   }--  "**tags**"
+
+"**systems**"   }--  "**teams**"
+
+"**user_teams**"   }--  "**users**"
+
+"**user_teams**"   }--  "**teams**"
+
+"**user_teams**"   }--  "**users**"
+@enduml

@@ -10,15 +10,18 @@ use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
 use retronomicon_dto as dto;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as Json;
+use serde_json::{json, Value as Json};
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
 pub mod users;
-pub use users::User;
+pub use users::*;
+
+pub mod tags;
+pub use tags::*;
 
 pub mod teams;
-pub use teams::Team;
+pub use teams::*;
 
 #[derive(Queryable, Debug, Selectable, Identifiable, Serialize, Deserialize)]
 pub struct Artifact {
@@ -83,6 +86,19 @@ pub struct Platform {
     pub owner_id: i32,
 }
 
+impl From<Platform> for dto::platform::Platform {
+    fn from(value: Platform) -> Self {
+        Self {
+            id: value.id,
+            slug: value.slug,
+            name: value.name,
+            description: value.description,
+            links: value.links.unwrap_or_else(|| json!({})),
+            metadata: value.metadata.unwrap_or_else(|| json!({})),
+        }
+    }
+}
+
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(tag_id, platform_id))]
 pub struct PlatformTag {
@@ -128,14 +144,6 @@ pub struct SystemReleaseArtifact {
 pub struct SystemTag {
     pub system_id: i32,
     pub tag_id: i32,
-}
-
-#[derive(Queryable, Debug, Identifiable)]
-pub struct Tag {
-    pub id: i32,
-    pub slug: String,
-    pub description: Option<String>,
-    pub color: i32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, FromSqlRow, AsExpression)]

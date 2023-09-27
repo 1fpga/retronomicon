@@ -10,3 +10,15 @@ rocket = { version = "0.5.0-rc.3", optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 strum = { version = "0.25.0", features = ["derive"] }
+schemars = { version = "0.8.15", optional = true }
+
+[dependencies.okapi]
+git = "https://github.com/GREsau/okapi.git"
+rev = "345e1176"
+optional = true
+version = "0.7.0-rc.1"
+features = ["impl_json_schema", "preserve_order"]
+
+[features]
+rocket = ["dep:rocket", "openapi"]
+openapi = ["okapi", "schemars"]

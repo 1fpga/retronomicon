@@ -9,13 +9,14 @@ use rocket::http::{Cookie, CookieJar, Status};
 use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::{request, Request};
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
+use rocket_okapi::OpenApiFromRequest;
 use scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// A user that is part of the root team.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
 pub struct RootUserGuard {
     pub id: i32,
 }
@@ -42,7 +43,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
 }
 
 /// A user that went through the signed up process and has a username.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
 pub struct AuthenticatedUserGuard {
     pub id: i32,
     pub username: String,
@@ -67,7 +68,7 @@ impl<'r> request::FromRequest<'r> for AuthenticatedUserGuard {
 }
 
 /// A potentially non-fully signed up user for the website.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, OpenApiFromRequest)]
 pub struct UserGuard {
     pub id: i32,
     pub username: Option<String>,

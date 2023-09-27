@@ -6,9 +6,11 @@ use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
+use retronomicon_dto as dto;
+use retronomicon_dto::teams::TeamRef;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use serde_json::Value as Json;
+use serde_json::{json, Value as Json};
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
@@ -19,14 +21,31 @@ pub struct Team {
     pub name: String,
     pub description: String,
     pub links: Option<Json>,
+    pub metadata: Option<Json>,
 }
 
-impl From<Team> for retronomicon_dto::teams::TeamRef {
+impl From<Team> for dto::teams::TeamRef {
     fn from(value: Team) -> Self {
         Self {
             id: value.id,
             name: value.name,
             slug: value.slug,
+        }
+    }
+}
+
+impl From<Team> for dto::teams::Team {
+    fn from(value: Team) -> Self {
+        Self {
+            team: TeamRef {
+                id: value.id,
+                name: value.name,
+                slug: value.slug,
+            },
+
+            description: value.description,
+            links: value.links.unwrap_or(json!({})),
+            metadata: value.metadata.unwrap_or(json!({})),
         }
     }
 }
