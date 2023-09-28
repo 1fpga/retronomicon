@@ -17,7 +17,7 @@ git = "https://github.com/GREsau/okapi.git"
 rev = "345e1176"
 optional = true
 version = "0.7.0-rc.1"
-features = ["impl_json_schema", "preserve_order"]
+features = ["impl_json_schema"]
 
 [features]
 rocket = ["dep:rocket", "openapi"]

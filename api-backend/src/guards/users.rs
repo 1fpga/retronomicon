@@ -12,8 +12,9 @@ use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use rocket_okapi::OpenApiFromRequest;
 use scoped_futures::ScopedFutureExt;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 
 /// A user that is part of the root team.
 #[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
@@ -45,9 +46,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
 /// A user that went through the signed up process and has a username.
 #[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
 pub struct AuthenticatedUserGuard {
-    pub id: i32,
-    pub username: String,
-    pub exp: i64,
+    inner: UserGuard,
 }
 
 #[rocket::async_trait]
@@ -64,6 +63,47 @@ impl<'r> request::FromRequest<'r> for AuthenticatedUserGuard {
                 Outcome::Forward(Status::Unauthorized)
             }
         })
+    }
+}
+
+impl Deref for AuthenticatedUserGuard {
+    type Target = UserGuard;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for AuthenticatedUserGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl TryFrom<UserGuard> for AuthenticatedUserGuard {
+    type Error = &'static str;
+
+    fn try_from(value: UserGuard) -> Result<Self, Self::Error> {
+        if value.username.is_some() {
+            Ok(Self { inner: value })
+        } else {
+            Err("User is not authenticated")
+        }
+    }
+}
+
+impl AuthenticatedUserGuard {
+    pub fn into_inner(self) -> UserGuard {
+        self.inner
+    }
+
+    pub fn username(&self) -> &str {
+        // This is guaranteed to be Some because of the `into()` implementation.
+        self.inner.username.as_ref().unwrap()
+    }
+
+    pub async fn into_model(self, db: &mut Db) -> Result<models::User, diesel::result::Error> {
+        self.inner.into_model(db).await
     }
 }
 
@@ -120,15 +160,7 @@ impl<'r> request::FromRequest<'r> for UserGuard {
 
 impl From<UserGuard> for Option<AuthenticatedUserGuard> {
     fn from(value: UserGuard) -> Self {
-        if let Some(username) = value.username {
-            Some(AuthenticatedUserGuard {
-                id: value.id,
-                username,
-                exp: value.exp,
-            })
-        } else {
-            None
-        }
+        AuthenticatedUserGuard::try_from(value).ok()
     }
 }
 
@@ -147,6 +179,14 @@ impl UserGuard {
 
     pub fn set_expiry(&mut self, expiry: i64) {
         self.exp = expiry;
+    }
+
+    pub async fn into_model(self, db: &mut Db) -> Result<models::User, diesel::result::Error> {
+        use users::dsl;
+        dsl::users
+            .filter(dsl::id.eq(self.id))
+            .first::<models::User>(db)
+            .await
     }
 
     pub fn from_model(user: models::User) -> Self {
@@ -197,19 +237,18 @@ impl UserGuard {
                     return Ok((false, u.clone(), Self::from_model(u)));
                 }
 
-                let user = diesel::insert_into(dsl::users)
-                    .values((
-                        dsl::username.eq(&username),
-                        dsl::email.eq(email),
-                        dsl::auth_provider.eq(&auth_provider),
-                        dsl::avatar_url.eq(avatar_url),
-                        dsl::need_reset.eq(false),
-                        dsl::deleted.eq(false),
-                        dsl::description.eq(""),
-                    ))
-                    .on_conflict_do_nothing()
-                    .get_result::<models::User>(db)
-                    .await?;
+                let user = models::User::create(
+                    db,
+                    username.as_deref(),
+                    None,
+                    avatar_url.as_deref(),
+                    email,
+                    Some(&auth_provider),
+                    None,
+                    json!({}),
+                    json!({}),
+                )
+                .await?;
 
                 Ok((true, user.clone(), Self::from_model(user)))
             }
@@ -245,32 +284,26 @@ impl UserGuard {
 
                 if let Some(links) = form.links.as_ref() {
                     changeset.links = Some(serde_json::to_value(links).unwrap());
-                } else {
+                } else if form.add_links.is_some() || form.remove_links.is_some() {
                     let mut links = BTreeMap::new();
-                    if !form.add_links.is_empty() || !form.remove_links.is_empty() {
-                        let user: models::User =
-                            schema::users::table.find(self.id).first(db).await?;
+                    let user: models::User = schema::users::table.find(self.id).first(db).await?;
 
-                        if let Some(Value::Object(user_links)) = user.links {
-                            for (k, v) in user_links.into_iter() {
-                                if v.is_string() {
-                                    links.insert(k.to_string(), v);
-                                }
-                            }
-                        }
+                    if let Value::Object(user_links) = user.links {
+                        links.extend(user_links.into_iter());
+                    }
 
-                        for (k, v) in form.add_links.iter() {
-                            links.insert(k.to_string(), serde_json::to_value(v).unwrap());
+                    if let Some(user_links) = form.add_links {
+                        for (k, v) in user_links.into_iter() {
+                            links.insert(k.to_string(), v.into());
                         }
-                        for k in form.remove_links.iter() {
+                    }
+                    if let Some(user_links) = form.remove_links {
+                        for k in user_links.into_iter() {
                             links.remove(&k.to_string());
                         }
                     }
-                    changeset.links = if links.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::to_value(links).unwrap())
-                    };
+
+                    changeset.links = Some(serde_json::to_value(links).unwrap());
                 }
 
                 diesel::update(schema::users::table)

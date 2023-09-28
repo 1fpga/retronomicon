@@ -3,7 +3,7 @@ use crate::{guards, models, schema};
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{delete, get, put};
+use rocket::{delete, get, post};
 use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 
@@ -27,7 +27,7 @@ pub async fn tags(
 
 /// Create or update a tag.
 #[openapi(tag = "Tags", ignore = "db")]
-#[put("/tags", data = "<tag>")]
+#[post("/tags", data = "<tag>")]
 pub async fn tags_create(
     mut db: Db,
     _user: guards::users::RootUserGuard,
@@ -38,12 +38,6 @@ pub async fn tags_create(
     diesel::insert_into(schema::tags::table)
         .values((
             schema::tags::slug.eq(&tag.slug),
-            schema::tags::description.eq(&tag.description),
-            schema::tags::color.eq(tag.color as i64),
-        ))
-        .on_conflict(schema::tags::slug)
-        .do_update()
-        .set((
             schema::tags::description.eq(&tag.description),
             schema::tags::color.eq(tag.color as i64),
         ))

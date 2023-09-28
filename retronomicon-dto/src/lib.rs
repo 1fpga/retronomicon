@@ -2,7 +2,9 @@ pub mod error;
 pub mod params;
 pub mod types;
 
-pub mod platform;
+pub mod cores;
+pub mod platforms;
+pub mod systems;
 pub mod tags;
 pub mod teams;
 pub mod user;

@@ -2,9 +2,12 @@ use anyhow::Error;
 use clap::Parser;
 use clap_verbosity_flag::Level as VerbosityLevel;
 use clap_verbosity_flag::Verbosity;
-use reqwest::{RequestBuilder, StatusCode};
+use reqwest::RequestBuilder;
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 use tracing::{debug, Level};
 use tracing_subscriber::fmt::Subscriber;
 use url::Url;
@@ -15,7 +18,7 @@ struct Opts {
     pub command: Command,
 
     /// Server to connect to.
-    // In debug mode this is set to localhost:8000,  while in production this is set to
+    // In debug mode this is set to localhost:8000, while in production this is set to
     // retronomicon.com.
     #[clap(long, env = "RETRONOMICON_SERVER", hide_env_values = true)]
     #[cfg_attr(debug_assertions, clap(default_value = "http://localhost:8000/"))]
@@ -29,21 +32,90 @@ struct Opts {
     #[clap(long, env = "RETRONOMICON_TOKEN", hide_env_values = true)]
     pub token: Option<String>,
 
+    /// Output pretty formatted JSON (no colors).
+    #[clap(
+        long,
+        global = true,
+        env = "RETRONOMICON_PRETTY",
+        hide_env_values = true
+    )]
+    pub pretty: bool,
+
     #[command(flatten)]
     pub verbose: Verbosity,
 }
 
 #[derive(Debug, Parser)]
 enum Command {
-    /// Returns the authentication information.
-    Whoami,
+    /// Platform commands.
+    Platforms(PlatformOpts),
+
+    /// System commands.
+    Systems(SystemOpts),
+
+    /// Team commands.
+    Teams(TeamOpts),
 
     /// User specific commands.
-    User(User),
+    Users(UserOpts),
+
+    /// Returns the authentication information.
+    Whoami,
 }
 
 #[derive(Debug, Parser)]
-pub struct User {
+pub struct TeamOpts {
+    #[command(subcommand)]
+    pub command: TeamCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum TeamCommand {
+    /// List teams.
+    List(TeamsListOpts),
+
+    /// Get a team's details.
+    Get(TeamGet),
+
+    /// Create a new team.
+    Create(TeamCreateOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct TeamsListOpts {
+    #[clap(flatten)]
+    paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct TeamGet {
+    /// The team's name or numerical id.
+    id: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct TeamCreateOpts {
+    /// The name of the team to create. Must be unique.
+    name: String,
+
+    /// The slug for the URL.
+    #[clap(long)]
+    slug: String,
+
+    #[clap(long, default_value = "")]
+    description: String,
+
+    /// Team's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// Team's metadata. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    metadata: Vec<String>,
+}
+
+#[derive(Debug, Parser)]
+pub struct UserOpts {
     #[command(subcommand)]
     pub command: UserCommand,
 }
@@ -58,6 +130,83 @@ pub enum UserCommand {
 
     /// Get a user's details.
     Get(UserGet),
+}
+
+#[derive(Debug, Parser)]
+pub struct PlatformOpts {
+    #[command(subcommand)]
+    pub command: PlatformCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum PlatformCommand {
+    /// List platforms.
+    List(PlatformsListOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct PlatformsListOpts {
+    #[clap(flatten)]
+    paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct SystemOpts {
+    #[command(subcommand)]
+    pub command: SystemCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum SystemCommand {
+    /// List systems.
+    List(SystemsListOpts),
+
+    /// Create a new system.
+    Create(SystemCreateOpts),
+
+    /// Get the details of a system.
+    Get(SystemGetOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct SystemGetOpts {
+    /// The system's slug or numerical id.
+    id: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct SystemsListOpts {
+    #[clap(flatten)]
+    paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct SystemCreateOpts {
+    /// The name of the system to create. Must be unique.
+    name: String,
+
+    /// The slug for the URL.
+    #[clap(long)]
+    slug: String,
+
+    #[clap(long)]
+    description: String,
+
+    #[clap(long)]
+    manufacturer: String,
+
+    /// System's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// System's metadata. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    metadata: Vec<String>,
+
+    /// The team that owns the system. The user must be an admin of this team.
+    /// Can be a slug or a numerical id.
+    #[clap(long)]
+    owner_team: String,
 }
 
 #[derive(Debug, Parser)]
@@ -116,6 +265,18 @@ pub struct UserGet {
     id: String,
 }
 
+fn output_json<J: Serialize>(value: J, opts: &Opts) -> Result<(), anyhow::Error> {
+    println!(
+        "{}",
+        if opts.pretty {
+            serde_json::to_string_pretty(&value)?
+        } else {
+            serde_json::to_string(&value)?
+        }
+    );
+    Ok(())
+}
+
 fn update_request<B: Serialize>(
     mut request: RequestBuilder,
     opts: &Opts,
@@ -132,34 +293,47 @@ fn update_request<B: Serialize>(
     request
 }
 
-async fn get<R>(path: &str, opts: &Opts) -> Result<R, Error>
-where
-    R: for<'de> Deserialize<'de>,
-{
-    let client = reqwest::Client::new();
-    let request = update_request::<()>(
-        client.request(reqwest::Method::GET, opts.server.join(path)?),
-        opts,
-        None,
-    )
-    .build()?;
-
-    let response = client.execute(request).await?;
-
-    match response.status() {
-        StatusCode::OK => response.json().await.map_err(Into::into),
-        code => Err(Error::msg(format!("Status code: {}", code))),
+fn links_dictionary_from_arg(arg: &Vec<String>) -> Option<BTreeMap<&str, &str>> {
+    if arg.is_empty() {
+        None
+    } else {
+        Some(
+            arg.into_iter()
+                .map(|x| x.split_once('=').unwrap_or((x.as_str(), "")))
+                .collect(),
+        )
     }
 }
 
-async fn post<Q, R>(path: &str, opts: &Opts, request: Q) -> Result<R, Error>
+fn metadata_dictionary_from_arg(
+    arg: &Vec<String>,
+) -> Result<Option<BTreeMap<&str, Value>>, anyhow::Error> {
+    if arg.is_empty() {
+        Ok(None)
+    } else {
+        arg.into_iter()
+            .map(|x| {
+                let (key, value) = x.split_once('=').unwrap_or((x.as_str(), "null"));
+                Ok((key, serde_json::from_str(value)?))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()
+            .map(Some)
+    }
+}
+
+async fn send<Q, R>(
+    method: reqwest::Method,
+    path: &str,
+    opts: &Opts,
+    request: Q,
+) -> Result<R, Error>
 where
     Q: Serialize,
     R: for<'de> Deserialize<'de>,
 {
     let client = reqwest::Client::new();
     let request = update_request(
-        client.request(reqwest::Method::POST, opts.server.join(path)?),
+        client.request(method, opts.server.join(path)?),
         opts,
         Some(request),
     )
@@ -167,9 +341,184 @@ where
 
     let response = client.execute(request).await?;
 
-    match response.status() {
-        StatusCode::OK => response.json().await.map_err(Into::into),
-        code => Err(Error::msg(format!("Status code: {}", code))),
+    if response.status().is_success() {
+        response.json().await.map_err(Into::into)
+    } else {
+        Err(Error::msg(format!("Status code: {}", response.status())))
+    }
+}
+
+async fn get<R>(path: &str, opts: &Opts) -> Result<R, Error>
+where
+    R: for<'de> Deserialize<'de>,
+{
+    send(reqwest::Method::GET, path, opts, ()).await
+}
+
+async fn post<Q, R>(path: &str, opts: &Opts, request: Q) -> Result<R, Error>
+where
+    Q: Serialize,
+    R: for<'de> Deserialize<'de>,
+{
+    send(reqwest::Method::POST, path, opts, request).await
+}
+
+async fn put<Q, R>(path: &str, opts: &Opts, request: Q) -> Result<R, Error>
+where
+    Q: Serialize,
+    R: for<'de> Deserialize<'de>,
+{
+    send(reqwest::Method::PUT, path, opts, request).await
+}
+
+async fn whoami(opts: &Opts) -> Result<(), anyhow::Error> {
+    let response: dto::user::UserDetails = get("/api/v1/me", opts).await?;
+    output_json(response, opts)
+}
+
+async fn user_update(
+    opts: &Opts,
+    _user_opts: &UserOpts,
+    UpdateUser {
+        user,
+        username,
+        description,
+        add_link,
+        remove_link,
+    }: &UpdateUser,
+) -> Result<(), anyhow::Error> {
+    let url = if let Some(u) = user {
+        format!("/api/v1/user/{u}")
+    } else {
+        "/api/v1/me/update".to_string()
+    };
+
+    let remove_links = if remove_link.is_empty() {
+        None
+    } else {
+        Some(remove_link.iter().map(|x| x.as_str()).collect())
+    };
+
+    let response: dto::Ok = put(
+        &url,
+        opts,
+        dto::user::UserUpdate {
+            username: username.as_deref(),
+            display_name: None,
+            description: description.as_deref(),
+            add_links: links_dictionary_from_arg(add_link),
+            remove_links,
+            ..Default::default()
+        },
+    )
+    .await?;
+    output_json(response, opts)
+}
+
+async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
+    match &user_opts.command {
+        UserCommand::Update(update_opts) => user_update(opts, user_opts, update_opts).await,
+        UserCommand::List(UsersList { paging }) => {
+            let query = format!("/api/v1/users?{}", paging.to_query());
+
+            let response: Vec<dto::user::UserRef> = get(&query, opts).await?;
+            output_json(response, opts)
+        }
+        UserCommand::Get(UserGet { id }) => {
+            let response: dto::user::UserDetails =
+                get(&format!("/api/v1/users/{}", id), opts).await?;
+            output_json(response, opts)
+        }
+    }
+}
+
+async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyhow::Error> {
+    match &platform_opts.command {
+        PlatformCommand::List(list_opts) => {
+            let query = format!("/api/v1/platforms?{}", list_opts.paging.to_query());
+
+            let response: Vec<dto::platforms::Platform> = get(&query, opts).await?;
+            output_json(response, opts)
+        }
+    }
+}
+
+async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Error> {
+    match &system_opts.command {
+        SystemCommand::List(list_opts) => {
+            let query = format!("/api/v1/systems?{}", list_opts.paging.to_query());
+
+            let response: Vec<dto::systems::SystemListItem> = get(&query, opts).await?;
+            output_json(response, opts)
+        }
+
+        SystemCommand::Create(SystemCreateOpts {
+            name,
+            slug,
+            description,
+            manufacturer,
+            links,
+            metadata,
+            owner_team,
+        }) => {
+            let response: dto::systems::SystemCreateResponse = post(
+                "/api/v1/systems",
+                opts,
+                dto::systems::SystemCreateRequest {
+                    name,
+                    slug,
+                    description,
+                    manufacturer,
+                    links: links_dictionary_from_arg(links),
+                    metadata: metadata_dictionary_from_arg(metadata)?,
+                    owner_team_id: IdOrSlug::parse(owner_team),
+                },
+            )
+            .await?;
+            output_json(response, opts)
+        }
+
+        SystemCommand::Get(SystemGetOpts { id }) => {
+            let response: dto::systems::SystemDetails =
+                get(&format!("/api/v1/systems/{}", id), opts).await?;
+            output_json(response, opts)
+        }
+    }
+}
+
+async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
+    match &team_opts.command {
+        TeamCommand::List(list_opts) => {
+            let query = format!("/api/v1/teams?{}", list_opts.paging.to_query());
+            let response: Vec<dto::teams::TeamRef> = get(&query, opts).await?;
+            output_json(response, opts)
+        }
+        TeamCommand::Get(get_opts) => {
+            let response: dto::teams::TeamDetails =
+                get(&format!("/api/v1/teams/{}", get_opts.id), opts).await?;
+            output_json(response, opts)
+        }
+        TeamCommand::Create(TeamCreateOpts {
+            name,
+            slug,
+            description,
+            links,
+            metadata,
+        }) => {
+            let response: dto::teams::TeamCreateResponse = post(
+                "/api/v1/teams",
+                opts,
+                dto::teams::TeamCreateRequest {
+                    name,
+                    slug,
+                    description,
+                    links: links_dictionary_from_arg(links),
+                    metadata: metadata_dictionary_from_arg(metadata)?,
+                },
+            )
+            .await?;
+            output_json(response, opts)
+        }
     }
 }
 
@@ -192,56 +541,19 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    match opts.command {
-        Command::Whoami => {
-            let response: dto::user::Me = get("/api/me", &opts).await.unwrap();
-            println!("{}", serde_json::to_string_pretty(&response).unwrap());
-        }
-        Command::User(ref user) => match &user.command {
-            UserCommand::Update(UpdateUser {
-                user,
-                username,
-                description,
-                add_link,
-                remove_link,
-            }) => {
-                let url = if let Some(u) = user {
-                    format!("/api/{u}/update")
-                } else {
-                    "/api/me/update".to_string()
-                };
-                let response: dto::Ok = post(
-                    &url,
-                    &opts,
-                    dto::user::UserUpdate {
-                        username: username.as_deref(),
-                        display_name: None,
-                        description: description.as_deref(),
-                        add_links: add_link
-                            .iter()
-                            .map(|x| x.split_once('=').unwrap())
-                            .collect(),
-                        remove_links: remove_link.iter().map(|x| x.as_str()).collect(),
-                        ..Default::default()
-                    },
-                )
-                .await
-                .unwrap();
-                println!("{}", serde_json::to_string_pretty(&response).unwrap());
-            }
-            UserCommand::List(ref users) => {
-                let query = format!("/api/users?{}", users.paging.to_query());
+    let result = match &opts.command {
+        Command::Platforms(platform_opts) => platform(&opts, platform_opts).await,
+        Command::Systems(system_opts) => system(&opts, system_opts).await,
+        Command::Teams(team_opts) => team(&opts, team_opts).await,
+        Command::Users(user_opts) => user(&opts, user_opts).await,
+        Command::Whoami => whoami(&opts).await,
+    };
 
-                let response: Vec<dto::user::UserRef> = get(&query, &opts).await.unwrap();
-                println!("{}", serde_json::to_string_pretty(&response).unwrap());
-            }
-            UserCommand::Get(ref user) => {
-                let response: dto::user::UserDetails =
-                    get(&format!("/api/users/{}", user.id), &opts)
-                        .await
-                        .unwrap();
-                println!("{}", serde_json::to_string_pretty(&response).unwrap());
-            }
-        },
+    match result {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
     }
 }

@@ -14,6 +14,15 @@ use serde_json::{json, Value as Json};
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
+pub mod cores;
+pub use cores::*;
+
+pub mod platforms;
+pub use platforms::*;
+
+pub mod systems;
+pub use systems::*;
+
 pub mod users;
 pub use users::*;
 
@@ -34,17 +43,6 @@ pub struct Artifact {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-pub struct Core {
-    pub id: i32,
-    pub slug: String,
-    pub name: String,
-    pub description: String,
-    pub metadata: Option<Json>,
-    pub links: Option<Json>,
-    pub owner_id: i32,
-}
-
-#[derive(Queryable, Debug, Identifiable)]
 pub struct CoreRelease {
     pub id: i32,
     pub version: String,
@@ -58,7 +56,7 @@ pub struct CoreRelease {
     pub core_id: i32,
     pub platform_id: i32,
     pub system_id: i32,
-    pub owner_id: i32,
+    pub owner_team_id: i32,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -75,47 +73,11 @@ pub struct CoreTag {
     pub tag_id: i32,
 }
 
-#[derive(Queryable, Debug, Identifiable, Serialize)]
-pub struct Platform {
-    pub id: i32,
-    pub slug: String,
-    pub name: String,
-    pub description: String,
-    pub links: Option<Json>,
-    pub metadata: Option<Json>,
-    pub owner_id: i32,
-}
-
-impl From<Platform> for dto::platform::Platform {
-    fn from(value: Platform) -> Self {
-        Self {
-            id: value.id,
-            slug: value.slug,
-            name: value.name,
-            description: value.description,
-            links: value.links.unwrap_or_else(|| json!({})),
-            metadata: value.metadata.unwrap_or_else(|| json!({})),
-        }
-    }
-}
-
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(tag_id, platform_id))]
 pub struct PlatformTag {
     pub platform_id: i32,
     pub tag_id: i32,
-}
-
-#[derive(Queryable, Debug, Identifiable)]
-pub struct System {
-    pub id: i32,
-    pub slug: String,
-    pub name: String,
-    pub description: String,
-    pub manufacturer: String,
-    pub links: Option<Json>,
-    pub metadata: Option<Json>,
-    pub owner_id: i32,
 }
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -176,7 +138,7 @@ impl FromSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
     }
 }
 
-impl From<UserTeamRole> for dto::teams::UserTeamRole {
+impl From<UserTeamRole> for dto::types::UserTeamRole {
     fn from(value: UserTeamRole) -> Self {
         match value {
             UserTeamRole::Owner => Self::Owner,
@@ -186,12 +148,12 @@ impl From<UserTeamRole> for dto::teams::UserTeamRole {
     }
 }
 
-impl From<dto::teams::UserTeamRole> for UserTeamRole {
-    fn from(value: dto::teams::UserTeamRole) -> Self {
+impl From<dto::types::UserTeamRole> for UserTeamRole {
+    fn from(value: dto::types::UserTeamRole) -> Self {
         match value {
-            dto::teams::UserTeamRole::Owner => Self::Owner,
-            dto::teams::UserTeamRole::Admin => Self::Admin,
-            dto::teams::UserTeamRole::Member => Self::Member,
+            dto::types::UserTeamRole::Owner => Self::Owner,
+            dto::types::UserTeamRole::Admin => Self::Admin,
+            dto::types::UserTeamRole::Member => Self::Member,
         }
     }
 }

@@ -35,8 +35,8 @@ pub struct User {
     pub deleted: bool,
 
     pub description: String,
-    pub links: Option<Json>,
-    pub metadata: Option<Json>,
+    pub links: Json,
+    pub metadata: Json,
 }
 
 impl From<User> for dto::user::User {
@@ -75,6 +75,36 @@ impl User {
         }
     }
 
+    pub async fn create(
+        db: &mut Db,
+        username: Option<&str>,
+        display_name: Option<&str>,
+        avatar_url: Option<&str>,
+        email: &str,
+        auth_provider: Option<&str>,
+        description: Option<&str>,
+        links: Json,
+        metadata: Json,
+    ) -> Result<Self, diesel::result::Error> {
+        use users::dsl;
+
+        diesel::insert_into(users::table)
+            .values((
+                dsl::username.eq(username),
+                dsl::display_name.eq(display_name),
+                dsl::email.eq(email),
+                dsl::auth_provider.eq(auth_provider),
+                dsl::description.eq(description.unwrap_or_default()),
+                dsl::need_reset.eq(false),
+                dsl::deleted.eq(false),
+                dsl::links.eq(links),
+                dsl::metadata.eq(metadata),
+            ))
+            .returning(users::all_columns)
+            .get_result::<Self>(db)
+            .await
+    }
+
     pub async fn invite_to(
         &self,
         db: &mut Db,
@@ -88,7 +118,7 @@ impl User {
             async move {
                 // Check if we already are part of the team or if there's an invitation
                 // pending.
-                let maybe_user_team = user_teams::dsl::user_teams
+                let maybe_user_team = dsl::user_teams
                     .filter(dsl::user_id.eq(self.id))
                     .filter(dsl::team_id.eq(team_id))
                     .first::<models::UserTeam>(db)
@@ -123,7 +153,7 @@ impl User {
     }
 
     /// Add a user to a team. This does not check for an invitation.
-    pub async fn add_team(
+    pub async fn join_team(
         &self,
         db: &mut Db,
         team_id: i32,

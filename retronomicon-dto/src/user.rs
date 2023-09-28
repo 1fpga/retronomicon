@@ -1,4 +1,5 @@
 use crate::teams::TeamRef;
+use crate::types::UserTeamRole;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -48,11 +49,8 @@ pub struct UserUpdate<'a> {
     pub description: Option<&'a str>,
     pub links: Option<BTreeMap<&'a str, &'a str>>,
     pub metadata: Option<BTreeMap<&'a str, Value>>,
-
-    #[serde(default)]
-    pub add_links: BTreeMap<&'a str, &'a str>,
-    #[serde(default)]
-    pub remove_links: Vec<&'a str>,
+    pub add_links: Option<BTreeMap<&'a str, &'a str>>,
+    pub remove_links: Option<Vec<&'a str>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,11 +72,19 @@ pub struct UserDetailsInner {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct UserTeamRef {
+    #[serde(flatten)]
+    pub team: TeamRef,
+    pub role: UserTeamRole,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct UserDetails {
     #[serde(flatten)]
     pub user: UserDetailsInner,
 
-    pub teams: Vec<TeamRef>,
+    pub teams: Vec<UserTeamRef>,
 }
 
 /// A User information.

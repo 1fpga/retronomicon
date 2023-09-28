@@ -28,17 +28,16 @@ diesel::table! {
     core_releases (id) {
         id -> Int4,
         version -> Varchar,
-        note -> Nullable<Text>,
+        notes -> Nullable<Text>,
         date_released -> Nullable<Timestamp>,
         date_uploaded -> Timestamp,
         prerelease -> Nullable<Bool>,
         yanked -> Nullable<Bool>,
-        links -> Nullable<Jsonb>,
+        links -> Jsonb,
         uploader_id -> Int4,
         core_id -> Int4,
         platform_id -> Int4,
-        system_id -> Int4,
-        owner_id -> Int4,
+        owner_team_id -> Int4,
     }
 }
 
@@ -56,9 +55,10 @@ diesel::table! {
         slug -> Varchar,
         name -> Varchar,
         description -> Text,
-        metadata -> Nullable<Jsonb>,
-        links -> Nullable<Jsonb>,
-        owner_id -> Int4,
+        metadata -> Jsonb,
+        links -> Jsonb,
+        system_id -> Int4,
+        owner_team_id -> Int4,
     }
 }
 
@@ -77,15 +77,15 @@ diesel::table! {
         #[max_length = 255]
         name -> Varchar,
         description -> Text,
-        links -> Nullable<Jsonb>,
-        metadata -> Nullable<Jsonb>,
-        owner_id -> Int4,
+        links -> Jsonb,
+        metadata -> Jsonb,
+        owner_team_id -> Int4,
     }
 }
 
 diesel::table! {
-    system_release_artifacts (artifact_id, system_file_release_id) {
-        system_file_release_id -> Int4,
+    system_release_artifacts (artifact_id, system_release_id) {
+        system_release_id -> Int4,
         artifact_id -> Int4,
     }
 }
@@ -99,7 +99,7 @@ diesel::table! {
         date_uploaded -> Timestamp,
         prerelease -> Nullable<Int4>,
         yanked -> Nullable<Bool>,
-        links -> Nullable<Jsonb>,
+        links -> Jsonb,
         user_id -> Int4,
         system_id -> Int4,
     }
@@ -120,9 +120,9 @@ diesel::table! {
         name -> Varchar,
         description -> Text,
         manufacturer -> Varchar,
-        links -> Nullable<Jsonb>,
-        metadata -> Nullable<Jsonb>,
-        owner_id -> Int4,
+        links -> Jsonb,
+        metadata -> Jsonb,
+        owner_team_id -> Int4,
     }
 }
 
@@ -143,8 +143,8 @@ diesel::table! {
         slug -> Varchar,
         name -> Varchar,
         description -> Text,
-        links -> Nullable<Jsonb>,
-        metadata -> Nullable<Jsonb>,
+        links -> Jsonb,
+        metadata -> Jsonb,
     }
 }
 
@@ -176,8 +176,8 @@ diesel::table! {
         need_reset -> Bool,
         deleted -> Bool,
         description -> Text,
-        links -> Nullable<Jsonb>,
-        metadata -> Nullable<Jsonb>,
+        links -> Jsonb,
+        metadata -> Jsonb,
     }
 }
 
@@ -185,22 +185,20 @@ diesel::joinable!(core_release_artifacts -> artifacts (artifact_id));
 diesel::joinable!(core_release_artifacts -> core_releases (core_release_id));
 diesel::joinable!(core_releases -> cores (core_id));
 diesel::joinable!(core_releases -> platforms (platform_id));
-diesel::joinable!(core_releases -> systems (system_id));
-diesel::joinable!(core_releases -> teams (owner_id));
+diesel::joinable!(core_releases -> teams (owner_team_id));
 diesel::joinable!(core_releases -> users (uploader_id));
 diesel::joinable!(core_tags -> cores (core_id));
 diesel::joinable!(core_tags -> tags (tag_id));
-diesel::joinable!(cores -> teams (owner_id));
+diesel::joinable!(cores -> systems (system_id));
+diesel::joinable!(cores -> teams (owner_team_id));
 diesel::joinable!(platform_tags -> platforms (platform_id));
 diesel::joinable!(platform_tags -> tags (tag_id));
-diesel::joinable!(platforms -> teams (owner_id));
+diesel::joinable!(platforms -> teams (owner_team_id));
 diesel::joinable!(system_release_artifacts -> artifacts (artifact_id));
-diesel::joinable!(system_release_artifacts -> system_releases (system_file_release_id));
+diesel::joinable!(system_release_artifacts -> system_releases (system_release_id));
 diesel::joinable!(system_releases -> systems (system_id));
 diesel::joinable!(system_releases -> users (user_id));
-diesel::joinable!(system_tags -> systems (system_id));
-diesel::joinable!(system_tags -> tags (tag_id));
-diesel::joinable!(systems -> teams (owner_id));
+diesel::joinable!(systems -> teams (owner_team_id));
 diesel::joinable!(user_teams -> teams (team_id));
 
 diesel::allow_tables_to_appear_in_same_query!(

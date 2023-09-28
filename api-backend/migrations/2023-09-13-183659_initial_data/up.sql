@@ -4,5 +4,6 @@ INSERT INTO "teams" VALUES(1,
                             'The root team which has administrative right.',
                             '{
                               "github": "https://github.com/golem-fpga/retronomicon"
-                            }'::jsonb
+                            }'::jsonb,
+                            '{}'
                            );

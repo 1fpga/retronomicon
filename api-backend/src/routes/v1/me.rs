@@ -5,24 +5,12 @@ use crate::{models, schema};
 use retronomicon_dto as dto;
 use rocket::http::{CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{get, post};
+use rocket::{get, post, put};
 use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 
 #[openapi(tag = "Users", ignore = "db")]
-#[get("/me/check?<username>")]
-pub async fn me_check(mut db: Db, username: String) -> Result<Json<bool>, Status> {
-    let exists = schema::users::table
-        .filter(schema::users::username.eq(&Some(username)))
-        .first::<models::User>(&mut db)
-        .await
-        .is_ok();
-
-    Ok(Json(exists))
-}
-
-#[openapi(tag = "Users", ignore = "db")]
-#[post("/me/update", format = "application/json", data = "<form>")]
+#[put("/me/update", format = "application/json", data = "<form>")]
 pub async fn me_update(
     mut db: Db,
     cookies: &CookieJar<'_>,

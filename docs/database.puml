@@ -26,17 +26,16 @@ entity "**core_releases**" {
   + ""id"": //serial [PK]//
   --
   *""version"": //character varying //
-  ""note"": //text //
+  ""notes"": //text //
   ""date_released"": //timestamp without time zone //
   *""date_uploaded"": //timestamp without time zone //
   ""prerelease"": //boolean //
   ""yanked"": //boolean //
-  ""links"": //jsonb //
+  *""links"": //jsonb //
   *""uploader_id"": //integer [FK]//
   *""core_id"": //integer [FK]//
   *""platform_id"": //integer [FK]//
-  *""system_id"": //integer [FK]//
-  *""owner_id"": //integer [FK]//
+  *""owner_team_id"": //integer [FK]//
 }
 
 entity "**core_tags**" {
@@ -53,9 +52,10 @@ entity "**cores**" {
   *""slug"": //slug //
   *""name"": //character varying //
   *""description"": //text //
-  ""metadata"": //jsonb //
-  ""links"": //jsonb //
-  *""owner_id"": //integer [FK]//
+  *""metadata"": //jsonb //
+  *""links"": //jsonb //
+  *""system_id"": //integer [FK]//
+  *""owner_team_id"": //integer [FK]//
 }
 
 entity "**platform_tags**" {
@@ -72,13 +72,13 @@ entity "**platforms**" {
   *""slug"": //slug //
   *""name"": //character varying(255) //
   *""description"": //text //
-  ""links"": //jsonb //
-  ""metadata"": //jsonb //
-  *""owner_id"": //integer [FK]//
+  *""links"": //jsonb //
+  *""metadata"": //jsonb //
+  *""owner_team_id"": //integer [FK]//
 }
 
 entity "**system_release_artifacts**" {
-  + ""system_file_release_id"": //integer [PK][FK]//
+  + ""system_release_id"": //integer [PK][FK]//
   + ""artifact_id"": //integer [PK][FK]//
   --
 }
@@ -94,14 +94,14 @@ entity "**system_releases**" {
   *""date_uploaded"": //timestamp without time zone //
   ""prerelease"": //integer //
   ""yanked"": //boolean //
-  ""links"": //jsonb //
+  *""links"": //jsonb //
   *""user_id"": //integer [FK]//
   *""system_id"": //integer [FK]//
 }
 
 entity "**system_tags**" {
-  + ""system_id"": //integer [PK][FK]//
-  + ""tag_id"": //integer [PK][FK]//
+  + ""system_id"": //integer [PK]//
+  + ""tag_id"": //integer [PK]//
   --
 }
 
@@ -114,9 +114,9 @@ entity "**systems**" {
   *""name"": //character varying //
   *""description"": //text //
   *""manufacturer"": //character varying //
-  ""links"": //jsonb //
-  ""metadata"": //jsonb //
-  *""owner_id"": //integer [FK]//
+  *""links"": //jsonb //
+  *""metadata"": //jsonb //
+  *""owner_team_id"": //integer [FK]//
 }
 
 entity "**tags**" {
@@ -135,8 +135,8 @@ entity "**teams**" {
   *""slug"": //slug //
   *""name"": //character varying //
   *""description"": //text //
-  ""links"": //jsonb //
-  ""metadata"": //jsonb //
+  *""links"": //jsonb //
+  *""metadata"": //jsonb //
 }
 
 entity "**user_teams**" {
@@ -160,8 +160,8 @@ entity "**users**" {
   *""need_reset"": //boolean //
   *""deleted"": //boolean //
   *""description"": //text //
-  ""links"": //jsonb //
-  ""metadata"": //jsonb //
+  *""links"": //jsonb //
+  *""metadata"": //jsonb //
 }
 
 "**core_release_artifacts**"   }--  "**artifacts**"
@@ -174,8 +174,6 @@ entity "**users**" {
 
 "**core_releases**"   }--  "**platforms**"
 
-"**core_releases**"   }--  "**systems**"
-
 "**core_releases**"   }--  "**users**"
 
 "**core_tags**"   }--  "**cores**"
@@ -183,6 +181,8 @@ entity "**users**" {
 "**core_tags**"   }--  "**tags**"
 
 "**cores**"   }--  "**teams**"
+
+"**cores**"   }--  "**systems**"
 
 "**platform_tags**"   }--  "**platforms**"
 
@@ -197,10 +197,6 @@ entity "**users**" {
 "**system_releases**"   }--  "**systems**"
 
 "**system_releases**"   }--  "**users**"
-
-"**system_tags**"   }--  "**systems**"
-
-"**system_tags**"   }--  "**tags**"
 
 "**systems**"   }--  "**teams**"
 

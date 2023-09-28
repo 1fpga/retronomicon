@@ -20,6 +20,7 @@ mod schema;
 mod types;
 
 mod routes;
+mod utils;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct RetronomiconConfig {
@@ -91,6 +92,7 @@ async fn main() -> Result<(), rocket::Error> {
     let rocket = rocket
         // The health endpoint.
         .mount("/api", routes![health_handler])
+        .mount("/api", routes::routes())
         // The v1 actual API endpoints.
         .mount("/api/v1", v1::routes())
         .mount(
@@ -116,8 +118,8 @@ async fn main() -> Result<(), rocket::Error> {
             }),
         )
         .attach(db::RetronomiconDb::init())
-        .attach(OAuth2::<v1::GitHubUserInfo>::fairing("github"))
-        .attach(OAuth2::<v1::GoogleUserInfo>::fairing("google"))
+        .attach(OAuth2::<routes::auth::GitHubUserInfo>::fairing("github"))
+        .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(fairings::cors::Cors)
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 

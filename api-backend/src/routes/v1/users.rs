@@ -3,11 +3,24 @@ use crate::{guards, models, schema};
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{get, post};
+use rocket::{get, post, put};
 use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
-use serde_json::json;
 
+/// Check availability of a username.
+#[openapi(tag = "Users", ignore = "db")]
+#[post("/users/check?<username>")]
+pub async fn check_username(mut db: Db, username: String) -> Result<Json<bool>, Status> {
+    let exists = schema::users::table
+        .filter(schema::users::username.eq(&Some(username)))
+        .first::<models::User>(&mut db)
+        .await
+        .is_ok();
+
+    Ok(Json(exists))
+}
+
+/// List all users.
 #[openapi(tag = "Users", ignore = "db")]
 #[get("/users?<paging..>")]
 pub async fn users(
@@ -39,12 +52,22 @@ pub async fn user_details_from_(
 
     let teams = models::UserTeam::belonging_to(&user)
         .inner_join(schema::teams::table)
-        .select((schema::teams::id, schema::teams::name, schema::teams::slug))
-        .load(&mut db)
+        .select((
+            schema::teams::id,
+            schema::teams::name,
+            schema::teams::slug,
+            schema::user_teams::role,
+        ))
+        .load::<(i32, String, String, models::UserTeamRole)>(&mut db)
         .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?
+        .optional()
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "Team not found".to_string()))?
         .into_iter()
-        .map(|(id, name, slug)| dto::teams::TeamRef { id, name, slug })
+        .map(|(id, name, slug, role)| dto::user::UserTeamRef {
+            team: dto::teams::TeamRef { id, name, slug },
+            role: role.into(),
+        })
         .collect();
 
     Ok(Json(dto::user::UserDetails {
@@ -53,8 +76,8 @@ pub async fn user_details_from_(
             id: user.id,
             username: username.clone(),
             description: user.description,
-            links: user.links.unwrap_or_else(|| json!({})),
-            metadata: user.metadata.unwrap_or_else(|| json!({})),
+            links: user.links,
+            metadata: user.metadata,
         },
     }))
 }
@@ -74,12 +97,7 @@ pub async fn users_id(
 
 /// Only root users can update other users.
 #[openapi(tag = "Users", ignore = "db")]
-#[post(
-    "/users/<id>/update",
-    rank = 1,
-    format = "application/json",
-    data = "<form>"
-)]
+#[put("/users/<id>", rank = 1, format = "application/json", data = "<form>")]
 pub async fn users_id_update(
     mut db: Db,
     _root_user: guards::users::RootUserGuard,
