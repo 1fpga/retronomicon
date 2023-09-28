@@ -8,6 +8,7 @@ entity "**artifacts**" {
   + ""id"": //serial [PK]//
   --
   *""filename"": //character varying //
+  *""created_at"": //timestamp without time zone //
   ""sha256"": //bytea //
   ""sha512"": //bytea //
   *""size"": //integer //
@@ -27,8 +28,7 @@ entity "**core_releases**" {
   --
   *""version"": //character varying //
   ""notes"": //text //
-  ""date_released"": //timestamp without time zone //
-  *""date_uploaded"": //timestamp without time zone //
+  *""date_released"": //timestamp without time zone //
   ""prerelease"": //boolean //
   ""yanked"": //boolean //
   *""links"": //jsonb //

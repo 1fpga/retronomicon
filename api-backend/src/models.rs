@@ -35,6 +35,7 @@ pub use teams::*;
 #[derive(Queryable, Debug, Selectable, Identifiable, Serialize, Deserialize)]
 pub struct Artifact {
     pub id: i32,
+    pub created_at: NaiveDateTime,
     pub filename: String,
     pub sha256: Option<Vec<u8>>,
     pub sha512: Option<Vec<u8>>,
@@ -47,8 +48,7 @@ pub struct CoreRelease {
     pub id: i32,
     pub version: String,
     pub note: Option<String>,
-    pub date_released: Option<NaiveDateTime>,
-    pub date_uploaded: NaiveDateTime,
+    pub date_released: NaiveDateTime,
     pub prerelease: Option<bool>,
     pub yanked: Option<bool>,
     pub links: Option<Json>,

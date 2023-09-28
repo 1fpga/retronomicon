@@ -10,6 +10,7 @@ diesel::table! {
     artifacts (id) {
         id -> Int4,
         filename -> Varchar,
+        created_at -> Timestamp,
         sha256 -> Nullable<Bytea>,
         sha512 -> Nullable<Bytea>,
         size -> Int4,
@@ -29,8 +30,7 @@ diesel::table! {
         id -> Int4,
         version -> Varchar,
         notes -> Nullable<Text>,
-        date_released -> Nullable<Timestamp>,
-        date_uploaded -> Timestamp,
+        date_released -> Timestamp,
         prerelease -> Nullable<Bool>,
         yanked -> Nullable<Bool>,
         links -> Jsonb,

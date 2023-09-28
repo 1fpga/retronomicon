@@ -117,6 +117,7 @@ CREATE TABLE artifacts
 (
     id           SERIAL PRIMARY KEY NOT NULL,
     filename     varchar            NOT NULL,
+    created_at   timestamp          NOT NULL,
     sha256       bytea,
     sha512       bytea,
     size         integer            NOT NULL,
@@ -136,8 +137,7 @@ CREATE TABLE core_releases
     id            SERIAL PRIMARY KEY NOT NULL,
     "version"     varchar            NOT NULL,
     notes         text,
-    date_released timestamp,
-    date_uploaded timestamp          NOT NULL,
+    date_released timestamp          NOT NULL,
     prerelease    bool,
     yanked        bool,
     links         jsonb              NOT NULL,
@@ -221,3 +221,14 @@ CREATE TABLE user_teams
     invite_from integer REFERENCES "users",
     CONSTRAINT user_teams_pkey PRIMARY KEY (team_id, user_id)
 );
+
+-- Create the root group.
+-- Add root user
+INSERT INTO "teams"
+VALUES (1,
+        'root', 'root',
+        'The root team which has administrative right.',
+        '{
+          "github": "https://github.com/golem-fpga/retronomicon"
+        }'::jsonb,
+        '{}');
