@@ -4,11 +4,11 @@ use crate::{models, schema};
 use diesel::prelude::*;
 use diesel::{Identifiable, Queryable};
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
-use serde::Serialize;
 use serde_json::value::Value as Json;
 
-#[derive(Queryable, Debug, Identifiable, Serialize)]
+#[derive(Queryable, Debug, Identifiable)]
 #[diesel(table_name = schema::platforms)]
 pub struct Platform {
     pub id: i32,
@@ -26,9 +26,6 @@ impl From<Platform> for dto::platforms::Platform {
             id: value.id,
             slug: value.slug,
             name: value.name,
-            description: value.description,
-            links: value.links,
-            metadata: value.metadata,
         }
     }
 }
@@ -74,6 +71,43 @@ impl Platform {
             .returning(schema::platforms::all_columns)
             .get_result::<Self>(db)
             .await
+    }
+
+    pub async fn list(
+        db: &mut Db,
+        page: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, diesel::result::Error> {
+        schema::platforms::table
+            .offset(page * limit)
+            .limit(limit)
+            .load::<Self>(db)
+            .await
+    }
+
+    pub async fn get_with_owner(
+        db: &mut Db,
+        id: IdOrSlug<'_>,
+    ) -> Result<Option<(Self, models::Team)>, diesel::result::Error> {
+        if let Some(id) = id.as_id() {
+            schema::platforms::table
+                .filter(schema::platforms::id.eq(id))
+                .inner_join(schema::teams::table)
+                .select((schema::platforms::all_columns, schema::teams::all_columns))
+                .first::<(Self, models::Team)>(db)
+                .await
+                .optional()
+        } else if let Some(slug) = id.as_slug() {
+            schema::platforms::table
+                .filter(schema::platforms::slug.eq(slug))
+                .inner_join(schema::teams::table)
+                .select((schema::platforms::all_columns, schema::teams::all_columns))
+                .first::<(Self, models::Team)>(db)
+                .await
+                .optional()
+        } else {
+            return Err(diesel::result::Error::NotFound);
+        }
     }
 
     pub async fn update(

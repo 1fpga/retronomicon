@@ -14,10 +14,13 @@ pub fn routes() -> Vec<rocket::Route> {
         auth::github_login,
         auth::google_login,
         auth::logout,
+        cores::cores_create,
+        cores::cores_list,
         me::me,
         me::me_token,
         me::me_update,
         platforms::platforms_create,
+        platforms::platforms_details,
         platforms::platforms_list,
         platforms::platforms_update,
         systems::systems_create,
@@ -34,7 +37,7 @@ pub fn routes() -> Vec<rocket::Route> {
         teams::teams_update,
         users::check_username,
         users::users,
-        users::users_id,
-        users::users_id_update,
+        users::users_details,
+        users::users_update,
     ]
 }

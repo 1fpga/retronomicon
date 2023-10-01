@@ -5,7 +5,6 @@ use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{get, post, put};
-use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 use serde_json::json;
 
@@ -15,17 +14,34 @@ pub async fn platforms_list(
     mut db: Db,
     paging: dto::params::PagingParams,
 ) -> Result<Json<Vec<dto::platforms::Platform>>, (Status, String)> {
-    use crate::schema::platforms::dsl::*;
-
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    platforms
-        .offset(page * limit)
-        .limit(limit)
-        .load::<models::Platform>(&mut db)
+    models::Platform::list(&mut db, page, limit)
         .await
         .map(|p| Json(p.into_iter().map(Into::into).collect()))
         .map_err(|e| (Status::InternalServerError, e.to_string()))
+}
+
+#[openapi(tag = "Platforms", ignore = "db")]
+#[get("/platforms/<platform_id>")]
+pub async fn platforms_details(
+    mut db: Db,
+    platform_id: dto::types::IdOrSlug<'_>,
+) -> Result<Json<dto::platforms::PlatformDetails>, (Status, String)> {
+    let (platform, owner_team) = models::Platform::get_with_owner(&mut db, platform_id)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "User not found".to_string()))?;
+
+    Ok(Json(dto::platforms::PlatformDetails {
+        id: platform.id,
+        slug: platform.slug,
+        name: platform.name,
+        description: platform.description,
+        links: platform.links,
+        metadata: platform.metadata,
+        owner_team: owner_team.into(),
+    }))
 }
 
 #[openapi(tag = "Platforms", ignore = "db")]
@@ -54,7 +70,7 @@ pub async fn platforms_create(
 
     // Check permissions.
     let role = user
-        .role_in(&mut db, team.id)
+        .role_in(&mut db, team_id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::Forbidden, "Not a member of the team".to_string()))?;
@@ -68,8 +84,8 @@ pub async fn platforms_create(
         slug,
         name,
         description,
-        links.unwrap_or_else(|| json!({})),
-        metadata.unwrap_or_else(|| json!({})),
+        json!(links.unwrap_or_default()),
+        json!(metadata.unwrap_or_default()),
         &team,
     )
     .await

@@ -49,11 +49,11 @@ pub async fn systems_create(
         manufacturer,
         links,
         metadata,
-        owner_team_id,
+        owner_team,
     } = form.into_inner();
 
     // Get team.
-    let team = Team::from_id_or_slug(&mut db, owner_team_id).await?;
+    let team = Team::from_id_or_slug(&mut db, owner_team).await?;
 
     let user = user
         .into_model(&mut db)
@@ -67,7 +67,7 @@ pub async fn systems_create(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::Forbidden, "Not a member of the team".to_string()))?;
 
-    if role < models::UserTeamRole::Admin {
+    if !role.can_create_systems() {
         return Err((Status::Forbidden, "Not enough permission".to_string()));
     }
 

@@ -140,6 +140,7 @@ dependencies = [
  "diesel_migrations",
  "dotenvy",
  "jsonwebtoken",
+ "regex",
  "reqwest",
  "retronomicon-dto",
  "rocket",

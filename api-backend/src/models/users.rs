@@ -1,6 +1,6 @@
 use crate::db::Db;
 use crate::models;
-use crate::schema::*;
+use crate::schema;
 use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
@@ -11,6 +11,7 @@ use diesel::upsert::on_constraint;
 use diesel::{AsExpression, FromSqlRow};
 use jsonwebtoken::DecodingKey;
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::request;
@@ -21,6 +22,7 @@ use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
 #[derive(Clone, Debug, Queryable, Identifiable, Selectable)]
+#[diesel(table_name = schema::users)]
 pub struct User {
     pub id: i32,
 
@@ -52,15 +54,15 @@ impl From<User> for dto::user::User {
 
 impl User {
     pub async fn from_id(db: &mut Db, id: i32) -> Result<Self, diesel::result::Error> {
-        users::table
-            .filter(users::id.eq(id))
+        schema::users::table
+            .filter(schema::users::id.eq(id))
             .first::<User>(db)
             .await
     }
 
     pub async fn from_username(db: &mut Db, name: &str) -> Result<Self, diesel::result::Error> {
-        users::table
-            .filter(users::username.eq(name))
+        schema::users::table
+            .filter(schema::users::username.eq(name))
             .first::<User>(db)
             .await
     }
@@ -71,8 +73,88 @@ impl User {
     ) -> Result<Self, diesel::result::Error> {
         match user_id {
             dto::user::UserIdOrUsername::Id(id) => Self::from_id(db, id).await,
-            dto::user::UserIdOrUsername::Username(name) => Self::from_username(db, &name).await,
+            dto::user::UserIdOrUsername::Username(name) => {
+                Self::from_username(db, name.into_inner()).await
+            }
         }
+    }
+
+    pub async fn get_user_team_and_role(
+        db: &mut Db,
+        user_id: i32,
+        team_id: IdOrSlug<'_>,
+    ) -> Result<Option<(models::User, models::Team, models::UserTeamRole)>, diesel::result::Error>
+    {
+        let mut query = schema::user_teams::table
+            .inner_join(schema::users::table.on(schema::users::id.eq(schema::user_teams::user_id)))
+            .inner_join(schema::teams::table)
+            .select((
+                schema::users::all_columns,
+                schema::teams::all_columns,
+                schema::user_teams::role,
+            ))
+            .filter(schema::user_teams::dsl::user_id.eq(user_id))
+            .into_boxed();
+
+        if let Some(id) = team_id.as_id() {
+            query = query.filter(schema::user_teams::dsl::team_id.eq(id));
+        } else if let Some(slug) = team_id.as_slug() {
+            query = query.filter(schema::teams::dsl::slug.eq(slug));
+        } else {
+            return Err(diesel::result::Error::NotFound);
+        }
+
+        query
+            .first::<(models::User, models::Team, models::UserTeamRole)>(db)
+            .await
+            .optional()
+    }
+
+    pub async fn list(
+        db: &mut Db,
+        page: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, diesel::result::Error> {
+        schema::users::table
+            .offset(page * limit)
+            .limit(limit)
+            .load::<Self>(db)
+            .await
+    }
+
+    pub async fn get_user_with_teams(
+        db: &mut Db,
+        user_id: dto::user::UserIdOrUsername<'_>,
+    ) -> Result<
+        Option<(Self, Vec<(i32, String, String, models::UserTeamRole)>)>,
+        diesel::result::Error,
+    > {
+        let user = Self::from_userid(db, user_id).await.optional()?;
+        if user.is_none() {
+            return Ok(None);
+        }
+        let user = user.unwrap();
+
+        let username = user
+            .username
+            .as_ref()
+            .ok_or(diesel::result::Error::NotFound)?;
+        if user.deleted {
+            return Err(diesel::result::Error::NotFound);
+        }
+
+        let teams = models::UserTeam::belonging_to(&user)
+            .inner_join(schema::teams::table)
+            .select((
+                schema::teams::id,
+                schema::teams::name,
+                schema::teams::slug,
+                schema::user_teams::role,
+            ))
+            .load::<(i32, String, String, models::UserTeamRole)>(db)
+            .await?;
+
+        Ok(Some((user, teams)))
     }
 
     pub async fn create(
@@ -86,9 +168,9 @@ impl User {
         links: Json,
         metadata: Json,
     ) -> Result<Self, diesel::result::Error> {
-        use users::dsl;
+        use schema::users::dsl;
 
-        diesel::insert_into(users::table)
+        diesel::insert_into(schema::users::table)
             .values((
                 dsl::username.eq(username),
                 dsl::display_name.eq(display_name),
@@ -100,7 +182,7 @@ impl User {
                 dsl::links.eq(links),
                 dsl::metadata.eq(metadata),
             ))
-            .returning(users::all_columns)
+            .returning(schema::users::all_columns)
             .get_result::<Self>(db)
             .await
     }
@@ -112,7 +194,7 @@ impl User {
         team_id: i32,
         role: models::UserTeamRole,
     ) -> Result<(), diesel::result::Error> {
-        use user_teams::dsl;
+        use schema::user_teams::dsl;
 
         db.transaction(|db| {
             async move {
@@ -134,12 +216,12 @@ impl User {
                             .await?;
                     }
                 } else {
-                    diesel::insert_into(user_teams::table)
+                    diesel::insert_into(schema::user_teams::table)
                         .values((
-                            user_teams::user_id.eq(self.id),
-                            user_teams::team_id.eq(team_id),
-                            user_teams::role.eq(role),
-                            user_teams::invite_from.eq(from_id),
+                            schema::user_teams::user_id.eq(self.id),
+                            schema::user_teams::team_id.eq(team_id),
+                            schema::user_teams::role.eq(role),
+                            schema::user_teams::invite_from.eq(from_id),
                         ))
                         .on_conflict_do_nothing()
                         .execute(db)
@@ -161,18 +243,18 @@ impl User {
     ) -> Result<(), diesel::result::Error> {
         db.transaction(|db| {
             async move {
-                diesel::insert_into(user_teams::table)
+                diesel::insert_into(schema::user_teams::table)
                     .values((
-                        user_teams::user_id.eq(self.id),
-                        user_teams::team_id.eq(team_id),
-                        user_teams::role.eq(role),
-                        user_teams::invite_from.eq(None::<i32>),
+                        schema::user_teams::user_id.eq(self.id),
+                        schema::user_teams::team_id.eq(team_id),
+                        schema::user_teams::role.eq(role),
+                        schema::user_teams::invite_from.eq(None::<i32>),
                     ))
                     .on_conflict(on_constraint("user_teams_pkey"))
                     .do_update()
                     .set((
-                        user_teams::role.eq(role),
-                        user_teams::invite_from.eq(None::<i32>),
+                        schema::user_teams::role.eq(role),
+                        schema::user_teams::invite_from.eq(None::<i32>),
                     ))
                     .execute(db)
                     .await?;
@@ -193,11 +275,11 @@ impl User {
     ) -> Result<(), diesel::result::Error> {
         db.transaction(|db| {
             async move {
-                diesel::update(user_teams::table)
-                    .filter(user_teams::user_id.eq(self.id))
-                    .filter(user_teams::team_id.eq(team_id))
-                    .filter(user_teams::invite_from.is_not_null())
-                    .set(user_teams::invite_from.eq(None::<i32>))
+                diesel::update(schema::user_teams::table)
+                    .filter(schema::user_teams::user_id.eq(self.id))
+                    .filter(schema::user_teams::team_id.eq(team_id))
+                    .filter(schema::user_teams::invite_from.is_not_null())
+                    .set(schema::user_teams::invite_from.eq(None::<i32>))
                     .execute(db)
                     .await?;
 
@@ -214,11 +296,11 @@ impl User {
         db: &mut Db,
         team_id: i32,
     ) -> Result<Option<models::UserTeamRole>, diesel::result::Error> {
-        user_teams::dsl::user_teams
-            .filter(user_teams::dsl::user_id.eq(self.id))
-            .filter(user_teams::dsl::team_id.eq(team_id))
-            .filter(user_teams::dsl::invite_from.is_null())
-            .select(user_teams::dsl::role)
+        schema::user_teams::dsl::user_teams
+            .filter(schema::user_teams::dsl::user_id.eq(self.id))
+            .filter(schema::user_teams::dsl::team_id.eq(team_id))
+            .filter(schema::user_teams::dsl::invite_from.is_null())
+            .select(schema::user_teams::dsl::role)
             .first::<models::UserTeamRole>(db)
             .await
             .optional()

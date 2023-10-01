@@ -4,13 +4,76 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// A valid username (not empty, not too long, no special characters).
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct Username<'v>(&'v str);
+
+impl<'v> Username<'v> {
+    pub fn new(username: &'v str) -> Result<Self, &'static str> {
+        if username.len() < 2 {
+            return Err("Username cannot be less than 2 characters");
+        }
+        if username.len() > 32 {
+            return Err("Username is too long");
+        }
+
+        // We know username isn't less than 2 characters.
+        if !username.starts_with(|c| matches!(c, 'a'..='z' | '_')) {
+            return Err("Username cannot start with an underscore");
+        }
+
+        // Validate against the regex `^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$`
+        for ch in username[1..username.len() - 1].chars() {
+            if !matches!(ch, 'a'..='z' | '0'..='9' | '_' | '.' | '-') {
+                return Err("Username must contain only lowercase letters, numbers, underscores, dots and dashes");
+            }
+        }
+        if !username.ends_with(|c| matches!(c, 'a'..='z' | '0'..='9' | '_')) {
+            return Err("Username must end with a lowercase letter, number or underscore");
+        }
+
+        Ok(Self(username))
+    }
+
+    pub fn into_inner(self) -> &'v str {
+        self.0
+    }
+}
+
+impl<'v> TryInto<Username<'v>> for &'v str {
+    type Error = &'static str;
+
+    fn try_into(self) -> Result<Username<'v>, Self::Error> {
+        Username::new(self)
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<'v> rocket::request::FromParam<'v> for Username<'v> {
+    type Error = &'static str;
+
+    fn from_param(param: &'v str) -> Result<Self, Self::Error> {
+        Username::new(param)
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<'v> rocket::form::FromFormField<'v> for Username<'v> {
+    fn from_value(field: rocket::form::ValueField<'v>) -> rocket::form::Result<'v, Self> {
+        Self::new(field.value)
+            .map_err(|_| rocket::form::Error::validation("Invalid username").into())
+    }
+}
+
 /// A user ID can be either an User ID (as an integer) or a username string.
-#[derive(Debug, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum UserIdOrUsername<'v> {
     Id(i32),
-    Username(&'v str),
+    #[serde(borrow)]
+    Username(Username<'v>),
 }
 
 impl<'v> UserIdOrUsername<'v> {
@@ -22,22 +85,36 @@ impl<'v> UserIdOrUsername<'v> {
     }
     pub fn as_username(&self) -> Option<&str> {
         match self {
-            UserIdOrUsername::Username(name) => Some(name),
+            UserIdOrUsername::Username(Username(name)) => Some(*name),
             _ => None,
         }
     }
 }
 
+impl From<i32> for UserIdOrUsername<'static> {
+    fn from(value: i32) -> Self {
+        Self::Id(value)
+    }
+}
+
 #[cfg(feature = "rocket")]
 impl<'v> rocket::request::FromParam<'v> for UserIdOrUsername<'v> {
-    type Error = std::convert::Infallible;
+    type Error = &'static str;
 
     fn from_param(param: &'v str) -> Result<Self, Self::Error> {
         match param.parse::<i32>() {
             Ok(id) => Ok(UserIdOrUsername::Id(id)),
-            Err(_) => Ok(UserIdOrUsername::Username(param)),
+            Err(_) => Username::new(param).map(UserIdOrUsername::Username),
         }
     }
+}
+
+/// Response when asking for the availability of a username.
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct UserCheckResponse {
+    pub username: String,
+    pub available: bool,
 }
 
 /// Parameters for updating a user.

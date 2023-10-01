@@ -6,10 +6,12 @@ CREATE TYPE user_team_role AS ENUM('owner', 'admin', 'member');
 
 CREATE DOMAIN slug varchar(255)
     CHECK ( value ~ '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$' )
+    CHECK ( value != 'me' AND value != 'owner' AND value != 'all' AND value != 'update' AND value != 'updates' AND value != 'release' AND value != 'releases' )
     CONSTRAINT slug_constraint NOT NULL;
 
 CREATE DOMAIN username varchar(255)
     CHECK ( value ~ '^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$' )
+    CHECK ( value ~ '^.{2,32}$' )
     CHECK ( value != 'me' )
     CHECK ( value != 'root' )
     CHECK ( value != 'admin' )

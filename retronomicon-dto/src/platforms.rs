@@ -1,9 +1,26 @@
+use crate::teams::TeamRef;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct PlatformRef {
+    pub id: i32,
+    pub slug: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct Platform {
+    pub id: i32,
+    pub slug: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct PlatformDetails {
     pub id: i32,
     pub slug: String,
 
@@ -11,6 +28,8 @@ pub struct Platform {
     pub description: String,
     pub links: Value,
     pub metadata: Value,
+
+    pub owner_team: TeamRef,
 }
 
 /// Parameters for creating a new platform.
@@ -27,10 +46,10 @@ pub struct PlatformCreateRequest<'v> {
     pub description: &'v str,
 
     /// Links to the platform's website, documentation, etc.
-    pub links: Option<Value>,
+    pub links: Option<BTreeMap<&'v str, String>>,
 
     /// Metadata for the platform. No schema is enforced.
-    pub metadata: Option<Value>,
+    pub metadata: Option<BTreeMap<&'v str, Value>>,
 
     /// The team id who will own the platform. The user must be a member of the
     /// team.

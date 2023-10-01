@@ -35,7 +35,7 @@ pub struct SystemCreateRequest<'a> {
     pub manufacturer: &'a str,
     pub links: Option<BTreeMap<&'a str, &'a str>>,
     pub metadata: Option<BTreeMap<&'a str, serde_json::Value>>,
-    pub owner_team_id: IdOrSlug<'a>,
+    pub owner_team: IdOrSlug<'a>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -116,6 +116,18 @@ pub enum UserTeamRole {
     Member = 0,
 }
 
+impl UserTeamRole {
+    pub(crate) fn can_create_systems(&self) -> bool {
+        // Admins and owners can create systems.
+        *self >= Self::Admin
+    }
+
+    pub fn can_create_cores(&self) -> bool {
+        // Admins and owners can create cores.
+        *self >= Self::Admin
+    }
+}
+
 impl ToSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
     fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
         match *self {

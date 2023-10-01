@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
+use tracing::warn;
 
 /// A user that is part of the root team.
 #[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
@@ -173,7 +174,18 @@ impl<'a> From<&UserGuard> for Cookie<'a> {
 }
 
 impl UserGuard {
-    pub fn new(id: i32, username: Option<String>, exp: i64) -> Self {
+    pub fn new(id: i32, username: Option<String>, exp: i64) -> Result<Self, &'static str> {
+        if exp < chrono::Utc::now().timestamp() {
+            return Err("Invalid expiry");
+        }
+        if let Some(ref n) = username {
+            dto::user::Username::new(n)?; // Validate username.
+        }
+
+        Ok(Self::new_unchecked(id, username, exp))
+    }
+
+    pub fn new_unchecked(id: i32, username: Option<String>, exp: i64) -> Self {
         Self { id, username, exp }
     }
 
@@ -190,7 +202,7 @@ impl UserGuard {
     }
 
     pub fn from_model(user: models::User) -> Self {
-        Self::new(user.id, user.username, default_expiration_())
+        Self::new_unchecked(user.id, user.username, default_expiration_())
     }
 
     pub async fn from_db(db: &mut Db, id: i32) -> Result<Self, diesel::result::Error> {
@@ -226,6 +238,17 @@ impl UserGuard {
         use users::dsl;
         db.transaction(|db| {
             async move {
+                // Set username to None if it doesn't validate.
+                let username = username.as_deref().and_then(|u| {
+                    dto::user::Username::new(u)
+                        .map(|u| u.into_inner())
+                        .map_err(|e| {
+                            warn!("login_from_auth: invalid username: {}", e);
+                            e
+                        })
+                        .ok()
+                });
+
                 let maybe_user = dsl::users
                     .filter(dsl::email.eq(email))
                     .filter(dsl::auth_provider.eq(&auth_provider))
@@ -239,7 +262,7 @@ impl UserGuard {
 
                 let user = models::User::create(
                     db,
-                    username.as_deref(),
+                    username,
                     None,
                     avatar_url.as_deref(),
                     email,

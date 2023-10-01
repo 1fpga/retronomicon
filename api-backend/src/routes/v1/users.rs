@@ -7,17 +7,28 @@ use rocket::{get, post, put};
 use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 
-/// Check availability of a username.
+/// Check availability of a username. This is easier and less resource intensive than
+/// getting the user's details and checking for 404.
 #[openapi(tag = "Users", ignore = "db")]
 #[post("/users/check?<username>")]
-pub async fn check_username(mut db: Db, username: String) -> Result<Json<bool>, Status> {
+pub async fn check_username(
+    mut db: Db,
+    username: &str,
+) -> Result<Json<dto::user::UserCheckResponse>, (Status, String)> {
+    // Validate the username.
+    dto::user::Username::new(username).map_err(|e| (Status::BadRequest, e.to_string()))?;
+
     let exists = schema::users::table
-        .filter(schema::users::username.eq(&Some(username)))
+        .filter(schema::users::username.eq(username))
         .first::<models::User>(&mut db)
         .await
         .is_ok();
 
-    Ok(Json(exists))
+    // Negate the existence because we want to return `true` if the username is available.
+    Ok(Json(dto::user::UserCheckResponse {
+        username: username.to_string(),
+        available: !exists,
+    }))
 }
 
 /// List all users.
@@ -29,40 +40,28 @@ pub async fn users(
 ) -> Result<Json<Vec<dto::user::User>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    schema::users::table
-        .offset(page * limit)
-        .limit(limit)
-        .load::<models::User>(&mut db)
+    models::User::list(&mut db, page, limit)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))
         .map(|u| Json(u.into_iter().map(Into::into).collect()))
 }
 
-pub async fn user_details_from_(
+#[openapi(tag = "Users", ignore = "db")]
+#[get("/users/<id>")]
+pub async fn users_details(
     mut db: Db,
-    user: models::User,
+    id: dto::user::UserIdOrUsername<'_>,
 ) -> Result<Json<dto::user::UserDetails>, (Status, String)> {
-    let username = user
-        .username
-        .as_ref()
+    let (user, teams) = models::User::get_user_with_teams(&mut db, id)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::NotFound, "User not found".to_string()))?;
-    if user.deleted {
+
+    if user.username.is_none() {
         return Err((Status::NotFound, "User not found".to_string()));
     }
 
-    let teams = models::UserTeam::belonging_to(&user)
-        .inner_join(schema::teams::table)
-        .select((
-            schema::teams::id,
-            schema::teams::name,
-            schema::teams::slug,
-            schema::user_teams::role,
-        ))
-        .load::<(i32, String, String, models::UserTeamRole)>(&mut db)
-        .await
-        .optional()
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .ok_or((Status::NotFound, "Team not found".to_string()))?
+    let teams = teams
         .into_iter()
         .map(|(id, name, slug, role)| dto::user::UserTeamRef {
             team: dto::teams::TeamRef { id, name, slug },
@@ -74,7 +73,7 @@ pub async fn user_details_from_(
         teams,
         user: dto::user::UserDetailsInner {
             id: user.id,
-            username: username.clone(),
+            username: user.username.unwrap(),
             description: user.description,
             links: user.links,
             metadata: user.metadata,
@@ -82,23 +81,10 @@ pub async fn user_details_from_(
     }))
 }
 
-#[openapi(tag = "Users", ignore = "db")]
-#[get("/users/<id>")]
-pub async fn users_id(
-    mut db: Db,
-    id: dto::user::UserIdOrUsername<'_>,
-) -> Result<Json<dto::user::UserDetails>, (Status, String)> {
-    let user = models::User::from_userid(&mut db, id)
-        .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?;
-
-    user_details_from_(db, user).await
-}
-
 /// Only root users can update other users.
 #[openapi(tag = "Users", ignore = "db")]
 #[put("/users/<id>", rank = 1, format = "application/json", data = "<form>")]
-pub async fn users_id_update(
+pub async fn users_update(
     mut db: Db,
     _root_user: guards::users::RootUserGuard,
     id: dto::user::UserIdOrUsername<'_>,
