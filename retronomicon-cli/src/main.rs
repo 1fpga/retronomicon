@@ -1,14 +1,16 @@
 use anyhow::Error;
 use clap::Parser;
-use clap_verbosity_flag::Level as VerbosityLevel;
 use clap_verbosity_flag::Verbosity;
-use reqwest::RequestBuilder;
+use clap_verbosity_flag::{InfoLevel, Level as VerbosityLevel};
+use reqwest::{Method, RequestBuilder};
 use retronomicon_dto as dto;
 use retronomicon_dto::types::IdOrSlug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use tracing::{debug, Level};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use tracing::{debug, info, Level};
 use tracing_subscriber::fmt::Subscriber;
 use url::Url;
 
@@ -42,11 +44,14 @@ struct Opts {
     pub pretty: bool,
 
     #[command(flatten)]
-    pub verbose: Verbosity,
+    pub verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Debug, Parser)]
 enum Command {
+    /// Core commands.
+    Cores(CoreOpts),
+
     /// Platform commands.
     Platforms(PlatformOpts),
 
@@ -62,6 +67,155 @@ enum Command {
     /// Returns the authentication information.
     Whoami,
 }
+
+#[derive(Debug, Parser)]
+pub struct CoreReleaseOpts {
+    /// The core to refer for releases.
+    #[clap(long)]
+    core: String,
+
+    #[command(subcommand)]
+    pub command: ReleaseCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum ReleaseCommand {
+    /// List releases.
+    List(ReleaseListOpts),
+
+    /// Create a new release.
+    Create(ReleaseCreateOpts),
+
+    /// Get the details of a release.
+    Get(ReleaseGetOpts),
+
+    /// Download an artifact.
+    Download(ReleaseDownloadOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct ReleaseDownloadOpts {
+    /// The release's id.
+    release_id: String,
+
+    /// The artifact id.
+    artifact: u32,
+}
+
+#[derive(Debug, Parser)]
+pub struct ReleaseListOpts {
+    #[clap(flatten)]
+    paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct ReleaseCreateOpts {
+    /// The platform to release.
+    #[clap(long)]
+    platform: String,
+
+    /// The version of the release. This must be unique per core+platform.
+    #[clap(long)]
+    version: String,
+
+    /// Release notes, in Markdown.
+    #[clap(long)]
+    notes: String,
+
+    /// Date and time the release was made. By default will use the current timestamp.
+    #[clap(long)]
+    date_released: Option<String>,
+
+    /// Whether this release is a prerelease. Prereleases are not shown by default.
+    #[clap(long)]
+    prerelease: bool,
+
+    /// Release's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// Release's metadata. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    metadata: Vec<String>,
+
+    /// Release's files. These are going to be uploaded along with the release.
+    #[clap(long)]
+    files: Vec<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+pub struct ReleaseGetOpts {
+    /// The release's slug or numerical id.
+    id: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct CoreOpts {
+    #[command(subcommand)]
+    pub command: CoreCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum CoreCommand {
+    /// Core-Release commands.
+    Releases(CoreReleaseOpts),
+
+    /// List cores.
+    List(CoresListOpts),
+
+    /// Create a new core.
+    Create(CoreCreateOpts),
+
+    /// Get the details of a core.
+    Get(CoreGetOpts),
+
+    /// Update a core.
+    Update(CoreUpdateOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct CoresListOpts {
+    #[clap(flatten)]
+    paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct CoreCreateOpts {
+    /// The name of the core to create. Must be unique.
+    name: String,
+
+    /// The slug for the URL.
+    #[clap(long)]
+    slug: String,
+
+    #[clap(long)]
+    description: String,
+
+    /// Either the system id or its slug.
+    #[clap(long)]
+    system: String,
+
+    /// Either the system id or its slug.
+    #[clap(long)]
+    team: String,
+
+    /// Core's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// Core's metadata. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    metadata: Vec<String>,
+}
+
+#[derive(Debug, Parser)]
+pub struct CoreGetOpts {
+    /// The core's slug or numerical id.
+    id: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct CoreUpdateOpts {}
 
 #[derive(Debug, Parser)]
 pub struct TeamOpts {
@@ -142,12 +296,40 @@ pub struct PlatformOpts {
 pub enum PlatformCommand {
     /// List platforms.
     List(PlatformsListOpts),
+
+    /// Create a platform.
+    Create(PlatformCreateOpts),
 }
 
 #[derive(Debug, Parser)]
 pub struct PlatformsListOpts {
     #[clap(flatten)]
     paging: PagingParams,
+}
+
+#[derive(Debug, Parser)]
+pub struct PlatformCreateOpts {
+    /// The name of the platform to create. Must be unique.
+    name: String,
+
+    /// The slug for the URL.
+    #[clap(long)]
+    slug: String,
+
+    /// The team to own the new platform.
+    #[clap(long)]
+    team: String,
+
+    #[clap(long)]
+    description: String,
+
+    /// Platform's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// Platform's metadata. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    metadata: Vec<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -206,7 +388,7 @@ pub struct SystemCreateOpts {
     /// The team that owns the system. The user must be an admin of this team.
     /// Can be a slug or a numerical id.
     #[clap(long)]
-    owner_team: String,
+    team: String,
 }
 
 #[derive(Debug, Parser)]
@@ -298,7 +480,7 @@ fn links_dictionary_from_arg(arg: &Vec<String>) -> Option<BTreeMap<&str, &str>> 
         None
     } else {
         Some(
-            arg.into_iter()
+            arg.iter()
                 .map(|x| x.split_once('=').unwrap_or((x.as_str(), "")))
                 .collect(),
         )
@@ -311,7 +493,7 @@ fn metadata_dictionary_from_arg(
     if arg.is_empty() {
         Ok(None)
     } else {
-        arg.into_iter()
+        arg.iter()
             .map(|x| {
                 let (key, value) = x.split_once('=').unwrap_or((x.as_str(), "null"));
                 Ok((key, serde_json::from_str(value)?))
@@ -344,7 +526,11 @@ where
     if response.status().is_success() {
         response.json().await.map_err(Into::into)
     } else {
-        Err(Error::msg(format!("Status code: {}", response.status())))
+        Err(Error::msg(format!(
+            "Status code: {}\n{}",
+            response.status(),
+            response.text().await?
+        )))
     }
 }
 
@@ -369,6 +555,52 @@ where
     R: for<'de> Deserialize<'de>,
 {
     send(reqwest::Method::PUT, path, opts, request).await
+}
+
+async fn upload<R>(
+    method: reqwest::Method,
+    path: &str,
+    opts: &Opts,
+    file_path: &Path,
+) -> Result<R, Error>
+where
+    R: for<'de> Deserialize<'de>,
+{
+    let file = tokio::fs::File::open(file_path).await?;
+
+    let client = reqwest::Client::new();
+    let request = update_request(
+        client.request(method, opts.server.join(path)?),
+        opts,
+        Option::<()>::None,
+    )
+    .header(
+        reqwest::header::CONTENT_DISPOSITION,
+        format!(
+            "attachment; filename=\"{}\"",
+            file_path.file_name().unwrap().to_string_lossy()
+        ),
+    )
+    .header(
+        reqwest::header::CONTENT_TYPE,
+        mime_guess2::from_ext(&file_path.extension().unwrap().to_string_lossy())
+            .first_raw()
+            .unwrap_or("application/octet-stream"),
+    )
+    .body(file)
+    .build()?;
+
+    let response = client.execute(request).await?;
+
+    if response.status().is_success() {
+        response.json().await.map_err(Into::into)
+    } else {
+        Err(Error::msg(format!(
+            "Status code: {}\n{}",
+            response.status(),
+            response.text().await?
+        )))
+    }
 }
 
 async fn whoami(opts: &Opts) -> Result<(), anyhow::Error> {
@@ -415,6 +647,130 @@ async fn user_update(
     output_json(response, opts)
 }
 
+async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyhow::Error> {
+    let core = IdOrSlug::parse(&release_opts.core);
+
+    match &release_opts.command {
+        ReleaseCommand::List(list_opts) => {
+            let query = format!(
+                "/api/v1/cores/{core}/releases?{}",
+                list_opts.paging.to_query()
+            );
+
+            let response: Vec<dto::cores::releases::CoreReleaseListItem> =
+                get(&query, opts).await?;
+            output_json(response, opts)
+        }
+        ReleaseCommand::Create(create_opts) => {
+            info!("Creating the release...");
+            let date_released = match &create_opts.date_released {
+                None => None,
+                Some(x) => Some(
+                    chrono::DateTime::parse_from_rfc3339(x)
+                        .map(|d| d.naive_utc())
+                        .or_else(|_| {
+                            chrono::NaiveDate::parse_from_str(x, "%Y-%m-%d")
+                                .map(|d| d.and_time(chrono::NaiveTime::default()))
+                        })?
+                        .timestamp(),
+                ),
+            };
+            let response: dto::cores::releases::CoreReleaseCreateResponse = post(
+                &format!("/api/v1/cores/{core}/releases"),
+                opts,
+                dto::cores::releases::CoreReleaseCreateRequest {
+                    version: &create_opts.version,
+                    notes: &create_opts.notes,
+                    date_released,
+                    prerelease: create_opts.prerelease,
+                    links: links_dictionary_from_arg(&create_opts.links).unwrap_or_default(),
+                    metadata: metadata_dictionary_from_arg(&create_opts.metadata)?
+                        .unwrap_or_default(),
+                    platform: IdOrSlug::parse(&create_opts.platform),
+                },
+            )
+            .await?;
+
+            output_json(&response, opts)?;
+
+            let release_id = response.id;
+            for path in &create_opts.files {
+                info!("Uploading file '{path:?}'...");
+                let _response: dto::Ok = upload(
+                    Method::POST,
+                    &format!("/api/v1/cores/{core}/releases/{release_id}/artifacts"),
+                    opts,
+                    path,
+                )
+                .await?;
+            }
+            info!("Done.");
+
+            Ok(())
+        }
+        ReleaseCommand::Get(ReleaseGetOpts { id: _ }) => {
+            todo!()
+        }
+        ReleaseCommand::Download(ReleaseDownloadOpts {
+            release_id,
+            artifact,
+        }) => {
+            let client = reqwest::Client::new();
+            let request = update_request(
+                client.get(opts.server.join(&format!(
+                    "/api/v1/cores/{core}/releases/{release_id}/artifacts/{artifact}/download"
+                ))?),
+                opts,
+                None::<()>,
+            )
+            .build()?;
+
+            let response = client.execute(request).await?.bytes().await?.to_vec();
+            std::io::stdout().write_all(&response)?;
+            Ok(())
+        }
+    }
+}
+
+async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
+    match &core_opts.command {
+        CoreCommand::Releases(release_opts) => release(&opts, release_opts).await,
+
+        CoreCommand::List(list_opts) => {
+            let query = format!("/api/v1/cores?{}", list_opts.paging.to_query());
+
+            let response: Vec<dto::cores::CoreListItem> = get(&query, opts).await?;
+            output_json(response, opts)
+        }
+        CoreCommand::Create(create_opts) => {
+            let response: dto::cores::CoreCreateResponse = post(
+                "/api/v1/cores",
+                opts,
+                dto::cores::CoreCreateRequest {
+                    name: &create_opts.name,
+                    slug: &create_opts.slug,
+                    description: &create_opts.description,
+                    links: links_dictionary_from_arg(&create_opts.links).unwrap_or_default(),
+                    metadata: metadata_dictionary_from_arg(&create_opts.metadata)?
+                        .unwrap_or_default(),
+                    system: IdOrSlug::parse(&create_opts.system),
+                    owner_team: IdOrSlug::parse(&create_opts.team),
+                },
+            )
+            .await?;
+            output_json(response, opts)
+        }
+        CoreCommand::Get(CoreGetOpts { id }) => {
+            let response: dto::cores::CoreDetailsResponse =
+                get(&format!("/api/v1/cores/{id}"), opts).await?;
+            output_json(response, opts)
+        }
+        CoreCommand::Update(CoreUpdateOpts {}) => {
+            todo!()
+        }
+    }
+}
+
 async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
     match &user_opts.command {
         UserCommand::Update(update_opts) => user_update(opts, user_opts, update_opts).await,
@@ -440,6 +796,22 @@ async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyho
             let response: Vec<dto::platforms::Platform> = get(&query, opts).await?;
             output_json(response, opts)
         }
+        PlatformCommand::Create(create_opts) => {
+            let response: dto::platforms::PlatformCreateResponse = post(
+                "/api/v1/platforms",
+                opts,
+                dto::platforms::PlatformCreateRequest {
+                    name: &create_opts.name,
+                    slug: &create_opts.slug,
+                    description: &create_opts.description,
+                    links: links_dictionary_from_arg(&create_opts.links),
+                    metadata: metadata_dictionary_from_arg(&create_opts.metadata)?,
+                    owner_team: IdOrSlug::parse(&create_opts.team),
+                },
+            )
+            .await?;
+            output_json(response, opts)
+        }
     }
 }
 
@@ -459,7 +831,7 @@ async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Err
             manufacturer,
             links,
             metadata,
-            owner_team,
+            team,
         }) => {
             let response: dto::systems::SystemCreateResponse = post(
                 "/api/v1/systems",
@@ -471,7 +843,7 @@ async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Err
                     manufacturer,
                     links: links_dictionary_from_arg(links),
                     metadata: metadata_dictionary_from_arg(metadata)?,
-                    owner_team_id: IdOrSlug::parse(owner_team),
+                    owner_team: IdOrSlug::parse(team),
                 },
             )
             .await?;
@@ -547,6 +919,7 @@ async fn main() {
         Command::Teams(team_opts) => team(&opts, team_opts).await,
         Command::Users(user_opts) => user(&opts, user_opts).await,
         Command::Whoami => whoami(&opts).await,
+        Command::Cores(core_opts) => core(&opts, core_opts).await,
     };
 
     match result {

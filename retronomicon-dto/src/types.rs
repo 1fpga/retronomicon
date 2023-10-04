@@ -13,7 +13,7 @@ pub enum UserTeamRole {
 }
 
 /// Either an ID (integer) or a slug (string).
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum IdOrSlug<'v> {
@@ -21,11 +21,49 @@ pub enum IdOrSlug<'v> {
     Slug(&'v str),
 }
 
+#[cfg(feature = "rocket")]
+mod rocket_impls {
+    use super::*;
+    use rocket::http::uri::fmt::Formatter;
+    use std::fmt::Write;
+
+    impl<'v> rocket::form::FromFormField<'v> for IdOrSlug<'v> {
+        fn from_value(field: rocket::form::ValueField<'v>) -> rocket::form::Result<'v, Self> {
+            Ok(IdOrSlug::parse(field.value))
+        }
+    }
+
+    impl<'v, T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::UriDisplay<T> for IdOrSlug<'v> {
+        fn fmt(&self, f: &mut Formatter<'_, T>) -> std::fmt::Result {
+            f.write_str(&self.to_string())
+        }
+    }
+
+    impl<'v, T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::FromUriParam<T, &'v str>
+        for IdOrSlug<'v>
+    {
+        type Target = IdOrSlug<'v>;
+
+        fn from_uri_param(param: &'v str) -> Self::Target {
+            Self::parse(param)
+        }
+    }
+}
+
+impl<'v> std::fmt::Display for IdOrSlug<'v> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IdOrSlug::Id(id) => write!(f, "{id}"),
+            IdOrSlug::Slug(slug) => f.write_str(slug),
+        }
+    }
+}
+
 impl<'v> IdOrSlug<'v> {
     pub fn parse(value: &'v str) -> Self {
         match value.parse::<i32>() {
             Ok(id) => IdOrSlug::Id(id),
-            Err(_) => IdOrSlug::Slug(value),
+            Err(_) => IdOrSlug::Slug(value.into()),
         }
     }
 

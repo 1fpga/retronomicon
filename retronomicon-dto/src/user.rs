@@ -19,8 +19,8 @@ impl<'v> Username<'v> {
         }
 
         // We know username isn't less than 2 characters.
-        if !username.starts_with(|c| matches!(c, 'a'..='z' | '_')) {
-            return Err("Username cannot start with an underscore");
+        if !username.starts_with(|c: char| c.is_ascii_lowercase()) {
+            return Err("Username must start with a letter");
         }
 
         // Validate against the regex `^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$`

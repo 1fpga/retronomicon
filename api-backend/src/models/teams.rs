@@ -72,6 +72,10 @@ impl FromIdOrSlug for Team {
 }
 
 impl Team {
+    pub fn is_root(&self) -> bool {
+        self.id == 1
+    }
+
     pub async fn create(
         db: &mut Db,
         slug: &str,
@@ -124,5 +128,13 @@ impl Team {
             .execute(db)
             .await?;
         Ok(())
+    }
+
+    pub async fn delete(db: &mut Db, id: i32) -> Result<(), diesel::result::Error> {
+        diesel::delete(schema::teams::table)
+            .filter(schema::teams::id.eq(id))
+            .execute(db)
+            .await
+            .map(|_| ())
     }
 }

@@ -1,6 +1,6 @@
 [default]
 # The URL of the frontend. This is used to generate links.
-base_url = "http://localhost:3000"
+base_url = "/"
 
 # Members (emails) of the root team.
 root_team = [
@@ -8,6 +8,10 @@ root_team = [
     "hans@retronomicon.dev",
 ]
 root_team_id = 1
+
+[default.limits]
+# 24 Megabytes
+json = 25165824
 
 [default.databases]
 # retronomicon_db is set automatically from the env variables.

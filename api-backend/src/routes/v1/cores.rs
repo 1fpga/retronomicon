@@ -1,5 +1,6 @@
 use crate::db::Db;
 use crate::types::FetchModel;
+use crate::utils::json;
 use crate::{guards, models};
 use retronomicon_dto as dto;
 use rocket::http::Status;
@@ -7,6 +8,8 @@ use rocket::serde::json::Json;
 use rocket::{get, post};
 use rocket_okapi::openapi;
 use serde_json::json;
+
+pub mod releases;
 
 #[openapi(tag = "Cores", ignore = "db")]
 #[get("/cores?<paging..>")]
@@ -32,6 +35,31 @@ pub async fn cores_list(
 }
 
 #[openapi(tag = "Cores", ignore = "db")]
+#[get("/cores/<core_id>")]
+pub async fn cores_details(
+    mut db: Db,
+    core_id: dto::types::IdOrSlug<'_>,
+) -> Result<Json<dto::cores::CoreDetailsResponse>, (Status, String)> {
+    let (core, owner_team, system) = models::Core::get_with_owner_and_system(&mut db, core_id)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "Core not found".to_string()))?;
+
+    Ok(Json(dto::cores::CoreDetailsResponse {
+        id: core.id,
+        slug: core.slug,
+        name: core.name,
+        description: core.description,
+        metadata: json::metadata_into_btree_map(core.metadata)
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?,
+        links: json::links_into_btree_map(core.links)
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?,
+        system: system.into(),
+        owner_team: owner_team.into(),
+    }))
+}
+
+#[openapi(tag = "Cores", ignore = "db")]
 #[post("/cores", format = "application/json", data = "<form>")]
 pub async fn cores_create(
     mut db: Db,
@@ -49,10 +77,11 @@ pub async fn cores_create(
     } = form.into_inner();
 
     let system = models::System::from_id_or_slug(&mut db, system).await?;
-    let (_user, team, role) = models::User::get_user_team_and_role(&mut db, user.id, owner_team)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .ok_or((Status::NotFound, "Not found".to_string()))?;
+    let (_user, team, role) =
+        models::User::get_user_team_and_role(&mut db, user.into(), owner_team)
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?
+            .ok_or((Status::NotFound, "Not found".to_string()))?;
 
     if !role.can_create_cores() {
         return Err((Status::Forbidden, "User cannot create cores".to_string()));

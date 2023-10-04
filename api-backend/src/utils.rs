@@ -1,3 +1,5 @@
+pub mod acls;
+
 pub mod json {
     use serde_json::Value;
     use std::collections::BTreeMap;

@@ -3,6 +3,7 @@ use crate::types::FromIdOrSlug;
 use crate::{models, schema};
 use diesel::prelude::*;
 use diesel::{Identifiable, Queryable};
+use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
@@ -37,6 +38,16 @@ impl FromIdOrSlug for System {
             .first::<Self>(db)
             .await
             .optional()
+    }
+}
+
+impl From<System> for dto::systems::SystemRef {
+    fn from(value: System) -> Self {
+        Self {
+            id: value.id,
+            slug: value.slug,
+            name: value.name,
+        }
     }
 }
 

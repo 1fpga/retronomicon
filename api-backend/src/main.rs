@@ -11,6 +11,7 @@ use rocket_okapi::settings::UrlObject;
 use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
 use std::collections::BTreeMap;
 use std::env;
+use std::path::PathBuf;
 
 mod db;
 mod fairings;
@@ -88,10 +89,28 @@ async fn main() -> Result<(), rocket::Error> {
         v.into_string().expect("Could not find the secret_key."),
     );
 
+    let static_root = figment
+        .find_value("static_root")
+        .ok()
+        .and_then(|v| v.into_string())
+        .unwrap_or_else(|| {
+            env::var("STATIC_ROOT").ok().unwrap_or_else(|| {
+                env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("static")
+                    .to_string_lossy()
+                    .to_string()
+            })
+        });
+
+    let prometheus = rocket_prometheus::PrometheusMetrics::new();
+
     let rocket = rocket::custom(figment);
     let rocket = rocket
         // The health endpoint.
-        .mount("/api", routes![health_handler])
+        .mount("/", routes![health_handler])
         .mount("/api", routes::routes())
         // The v1 actual API endpoints.
         .mount("/api/v1", v1::routes())
@@ -117,7 +136,13 @@ async fn main() -> Result<(), rocket::Error> {
                 ..Default::default()
             }),
         )
+        .mount("/metrics", prometheus.clone())
+        .mount(
+            "/",
+            rocket::fs::FileServer::from(PathBuf::from(static_root)),
+        )
         .attach(db::RetronomiconDb::init())
+        .attach(prometheus)
         .attach(OAuth2::<routes::auth::GitHubUserInfo>::fairing("github"))
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(fairings::cors::Cors)

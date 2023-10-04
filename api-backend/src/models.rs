@@ -14,6 +14,9 @@ use serde_json::{json, Value as Json};
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
+pub mod artifact;
+pub use artifact::*;
+
 pub mod cores;
 pub use cores::*;
 
@@ -31,40 +34,6 @@ pub use tags::*;
 
 pub mod teams;
 pub use teams::*;
-
-#[derive(Queryable, Debug, Selectable, Identifiable, Serialize, Deserialize)]
-pub struct Artifact {
-    pub id: i32,
-    pub created_at: NaiveDateTime,
-    pub filename: String,
-    pub sha256: Option<Vec<u8>>,
-    pub sha512: Option<Vec<u8>>,
-    pub size: i32,
-    pub download_url: Option<String>,
-}
-
-#[derive(Queryable, Debug, Identifiable)]
-pub struct CoreRelease {
-    pub id: i32,
-    pub version: String,
-    pub note: Option<String>,
-    pub date_released: NaiveDateTime,
-    pub prerelease: Option<bool>,
-    pub yanked: Option<bool>,
-    pub links: Option<Json>,
-    pub uploader_id: i32,
-    pub core_id: i32,
-    pub platform_id: i32,
-    pub system_id: i32,
-    pub owner_team_id: i32,
-}
-
-#[derive(Queryable, Debug, Identifiable)]
-#[diesel(primary_key(core_release_id, artifact_id))]
-pub struct CoreReleaseArtifact {
-    pub core_release_id: i32,
-    pub artifact_id: i32,
-}
 
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(primary_key(tag_id, core_id))]
@@ -85,12 +54,12 @@ pub struct SystemRelease {
     pub id: i32,
     pub version: String,
     pub note: Option<String>,
-    pub date_released: Option<NaiveDateTime>,
-    pub date_uploaded: NaiveDateTime,
-    pub prerelease: Option<i32>,
-    pub yanked: Option<bool>,
-    pub links: Option<Json>,
-    pub user_id: i32,
+    pub date_released: NaiveDateTime,
+    pub prerelease: i32,
+    pub yanked: bool,
+    pub links: Json,
+    pub metadata: Json,
+    pub uploader_id: i32,
     pub system_id: i32,
 }
 

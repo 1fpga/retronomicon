@@ -1,13 +1,12 @@
 use crate::db::Db;
 use crate::guards::users::AuthenticatedUserGuard;
-use crate::models::{User, UserTeamRole};
-use crate::types::FetchModel;
-use crate::utils::json;
+use crate::models::UserTeamRole;
+use crate::utils::{acls, json};
 use crate::{models, schema};
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{get, post, put};
+use rocket::{delete, get, post, put};
 use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 use serde_json::{json, Value};
@@ -93,7 +92,7 @@ pub async fn teams_details(
 
 /// Create a new team, and make the current user its owner.
 #[openapi(tag = "Teams", ignore = "db")]
-#[post("/teams", data = "<form>", rank = 1)]
+#[post("/teams", data = "<form>")]
 pub async fn teams_create(
     mut db: Db,
     owner: AuthenticatedUserGuard,
@@ -116,6 +115,10 @@ pub async fn teams_create(
         .into_model(db)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    if !acls::can_create_team(&user) {
+        return Err((Status::Unauthorized, "Insufficient permissions".to_string()));
+    }
 
     let team = models::Team::create(
         db,
@@ -140,7 +143,7 @@ pub async fn teams_create(
 
 /// Create a new team, and make the current user its owner.
 #[openapi(tag = "Teams", ignore = "db")]
-#[put("/teams/<team_id>", data = "<form>", rank = 1)]
+#[put("/teams/<team_id>", data = "<form>")]
 pub async fn teams_update(
     mut db: Db,
     owner: AuthenticatedUserGuard,
@@ -148,15 +151,15 @@ pub async fn teams_update(
     form: Json<dto::teams::TeamUpdateRequest<'_>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let db = &mut db;
-    let mut team = models::Team::from_id_or_slug(db, team_id).await?;
-
-    let user = owner
-        .into_model(db)
+    let (user, mut team, role) = models::User::get_user_team_and_role(db, owner.id.into(), team_id)
         .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?;
-    if user.role_in(db, team.id).await != Ok(Some(UserTeamRole::Owner)) {
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "Not found".to_string()))?;
+
+    if !acls::can_update_team(&user, &team, &role) {
         return Err((Status::Unauthorized, "Insufficient permissions".to_string()));
     }
+
     let dto::teams::TeamUpdateRequest {
         slug,
         name,
@@ -195,43 +198,62 @@ pub async fn teams_update(
 }
 
 #[openapi(tag = "Teams", ignore = "db")]
-#[post("/teams/<team_id>/invitation", data = "<form>", rank = 1)]
+#[delete("/teams/<team_id>")]
+pub async fn teams_delete(
+    mut db: Db,
+    admin: AuthenticatedUserGuard,
+    team_id: dto::types::IdOrSlug<'_>,
+) -> Result<Json<dto::Ok>, (Status, String)> {
+    let db = &mut db;
+    let (user, team, role) = models::User::get_user_team_and_role(db, admin.into(), team_id)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "Not found".to_string()))?;
+
+    if !acls::can_delete_team(&user, &team, &role) {
+        return Err((Status::Unauthorized, "Insufficient permissions".to_string()));
+    }
+
+    models::Team::delete(db, team.id)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    Ok(Json(dto::Ok))
+}
+
+#[openapi(tag = "Teams", ignore = "db")]
+#[post("/teams/<team_id>/invitation", data = "<form>")]
 pub async fn invite(
     mut db: Db,
-    invitee: AuthenticatedUserGuard,
+    admin: AuthenticatedUserGuard,
     team_id: i32,
     form: Json<dto::teams::TeamInvite<'_>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let db = &mut db;
+    let (admin_user, team, admin_role) =
+        models::User::get_user_team_and_role(db, admin.id.into(), team_id.into())
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?
+            .ok_or((Status::NotFound, "Not found".to_string()))?;
+
     let dto::teams::TeamInvite { user, role } = form.into_inner();
     let user = models::User::from_userid(db, user)
         .await
         .map_err(|e| (Status::NotFound, e.to_string()))?;
-
     let role = UserTeamRole::from(role);
 
-    // Verify that the admin has the right to invite.
-    let invitee_user = User::from_id(db, invitee.id)
-        .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?;
-    let invitee_role = invitee_user
-        .role_in(db, team_id)
-        .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?
-        .ok_or((Status::NotFound, "User not part of the team".to_string()))?;
-    if invitee_role > role {
+    if !acls::can_invite_to_team(&team, &admin_user, &admin_role, &user, &role) {
         return Err((Status::Unauthorized, "Insufficient permissions".to_string()));
     }
 
-    user.invite_to(db, invitee.id, team_id, role)
+    user.invite_to(db, admin_user.id, team.id, role)
         .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?;
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
     Ok(Json(dto::Ok))
 }
 
 #[openapi(tag = "Teams", ignore = "db")]
-#[post("/teams/<team_id>/invitation/accept", rank = 1)]
+#[post("/teams/<team_id>/invitation/accept")]
 pub async fn invite_accept(
     mut db: Db,
     invited: AuthenticatedUserGuard,

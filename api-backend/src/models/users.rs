@@ -5,18 +5,15 @@ use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use diesel::prelude::*;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::upsert::on_constraint;
 use diesel::{AsExpression, FromSqlRow};
 use jsonwebtoken::DecodingKey;
 use retronomicon_dto as dto;
-use retronomicon_dto::types::IdOrSlug;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::request;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
-use scoped_futures::ScopedFutureExt;
 use serde_json::Value as Json;
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
@@ -52,6 +49,15 @@ impl From<User> for dto::user::User {
     }
 }
 
+impl From<User> for dto::user::UserRef {
+    fn from(value: User) -> Self {
+        Self {
+            id: value.id,
+            username: value.username.unwrap_or_default(),
+        }
+    }
+}
+
 impl User {
     pub async fn from_id(db: &mut Db, id: i32) -> Result<Self, diesel::result::Error> {
         schema::users::table
@@ -81,8 +87,8 @@ impl User {
 
     pub async fn get_user_team_and_role(
         db: &mut Db,
-        user_id: i32,
-        team_id: IdOrSlug<'_>,
+        user_id: dto::user::UserIdOrUsername<'_>,
+        team_id: dto::types::IdOrSlug<'_>,
     ) -> Result<Option<(models::User, models::Team, models::UserTeamRole)>, diesel::result::Error>
     {
         let mut query = schema::user_teams::table
@@ -93,15 +99,22 @@ impl User {
                 schema::teams::all_columns,
                 schema::user_teams::role,
             ))
-            .filter(schema::user_teams::dsl::user_id.eq(user_id))
             .into_boxed();
+
+        if let Some(id) = user_id.as_id() {
+            query = query.filter(schema::users::dsl::id.eq(id));
+        } else if let Some(username) = user_id.as_username() {
+            query = query.filter(schema::users::dsl::username.eq(username));
+        } else {
+            return Ok(None);
+        }
 
         if let Some(id) = team_id.as_id() {
             query = query.filter(schema::user_teams::dsl::team_id.eq(id));
         } else if let Some(slug) = team_id.as_slug() {
             query = query.filter(schema::teams::dsl::slug.eq(slug));
         } else {
-            return Err(diesel::result::Error::NotFound);
+            return Ok(None);
         }
 
         query
@@ -196,42 +209,37 @@ impl User {
     ) -> Result<(), diesel::result::Error> {
         use schema::user_teams::dsl;
 
-        db.transaction(|db| {
-            async move {
-                // Check if we already are part of the team or if there's an invitation
-                // pending.
-                let maybe_user_team = dsl::user_teams
+        // Check if we already are part of the team or if there's an invitation
+        // pending.
+        let maybe_user_team = dsl::user_teams
+            .filter(dsl::user_id.eq(self.id))
+            .filter(dsl::team_id.eq(team_id))
+            .first::<models::UserTeam>(db)
+            .await
+            .optional()?;
+        if let Some(user_team) = maybe_user_team {
+            if user_team.role < role {
+                diesel::update(dsl::user_teams)
                     .filter(dsl::user_id.eq(self.id))
                     .filter(dsl::team_id.eq(team_id))
-                    .first::<models::UserTeam>(db)
-                    .await
-                    .optional()?;
-                if let Some(user_team) = maybe_user_team {
-                    if user_team.role < role {
-                        diesel::update(dsl::user_teams)
-                            .filter(dsl::user_id.eq(self.id))
-                            .filter(dsl::team_id.eq(team_id))
-                            .set(dsl::role.eq(role))
-                            .execute(db)
-                            .await?;
-                    }
-                } else {
-                    diesel::insert_into(schema::user_teams::table)
-                        .values((
-                            schema::user_teams::user_id.eq(self.id),
-                            schema::user_teams::team_id.eq(team_id),
-                            schema::user_teams::role.eq(role),
-                            schema::user_teams::invite_from.eq(from_id),
-                        ))
-                        .on_conflict_do_nothing()
-                        .execute(db)
-                        .await?;
-                }
-                Ok(())
+                    .set(dsl::role.eq(role))
+                    .execute(db)
+                    .await?;
             }
-            .scope_boxed()
-        })
-        .await
+        } else {
+            diesel::insert_into(schema::user_teams::table)
+                .values((
+                    schema::user_teams::user_id.eq(self.id),
+                    schema::user_teams::team_id.eq(team_id),
+                    schema::user_teams::role.eq(role),
+                    schema::user_teams::invite_from.eq(from_id),
+                ))
+                .on_conflict_do_nothing()
+                .execute(db)
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Add a user to a team. This does not check for an invitation.
@@ -241,29 +249,23 @@ impl User {
         team_id: i32,
         role: models::UserTeamRole,
     ) -> Result<(), diesel::result::Error> {
-        db.transaction(|db| {
-            async move {
-                diesel::insert_into(schema::user_teams::table)
-                    .values((
-                        schema::user_teams::user_id.eq(self.id),
-                        schema::user_teams::team_id.eq(team_id),
-                        schema::user_teams::role.eq(role),
-                        schema::user_teams::invite_from.eq(None::<i32>),
-                    ))
-                    .on_conflict(on_constraint("user_teams_pkey"))
-                    .do_update()
-                    .set((
-                        schema::user_teams::role.eq(role),
-                        schema::user_teams::invite_from.eq(None::<i32>),
-                    ))
-                    .execute(db)
-                    .await?;
+        diesel::insert_into(schema::user_teams::table)
+            .values((
+                schema::user_teams::user_id.eq(self.id),
+                schema::user_teams::team_id.eq(team_id),
+                schema::user_teams::role.eq(role),
+                schema::user_teams::invite_from.eq(None::<i32>),
+            ))
+            .on_conflict(on_constraint("user_teams_pkey"))
+            .do_update()
+            .set((
+                schema::user_teams::role.eq(role),
+                schema::user_teams::invite_from.eq(None::<i32>),
+            ))
+            .execute(db)
+            .await?;
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await
+        Ok(())
     }
 
     /// Accept an invitation to a team. This will fail if there's no invitation
@@ -273,21 +275,15 @@ impl User {
         db: &mut Db,
         team_id: i32,
     ) -> Result<(), diesel::result::Error> {
-        db.transaction(|db| {
-            async move {
-                diesel::update(schema::user_teams::table)
-                    .filter(schema::user_teams::user_id.eq(self.id))
-                    .filter(schema::user_teams::team_id.eq(team_id))
-                    .filter(schema::user_teams::invite_from.is_not_null())
-                    .set(schema::user_teams::invite_from.eq(None::<i32>))
-                    .execute(db)
-                    .await?;
+        diesel::update(schema::user_teams::table)
+            .filter(schema::user_teams::user_id.eq(self.id))
+            .filter(schema::user_teams::team_id.eq(team_id))
+            .filter(schema::user_teams::invite_from.is_not_null())
+            .set(schema::user_teams::invite_from.eq(None::<i32>))
+            .execute(db)
+            .await?;
 
-                Ok(())
-            }
-            .scope_boxed()
-        })
-        .await
+        Ok(())
     }
 
     /// Returns the UserTeamRole, if there's one.

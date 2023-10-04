@@ -49,6 +49,16 @@ impl FromIdOrSlug for Platform {
     }
 }
 
+impl From<Platform> for dto::platforms::PlatformRef {
+    fn from(value: Platform) -> Self {
+        Self {
+            id: value.id,
+            slug: value.slug,
+            name: value.name,
+        }
+    }
+}
+
 impl Platform {
     pub async fn create(
         db: &mut Db,

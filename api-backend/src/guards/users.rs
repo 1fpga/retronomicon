@@ -67,6 +67,12 @@ impl<'r> request::FromRequest<'r> for AuthenticatedUserGuard {
     }
 }
 
+impl From<AuthenticatedUserGuard> for dto::user::UserIdOrUsername<'static> {
+    fn from(user: AuthenticatedUserGuard) -> Self {
+        Self::Id(user.id)
+    }
+}
+
 impl Deref for AuthenticatedUserGuard {
     type Target = UserGuard;
 
@@ -170,6 +176,21 @@ impl<'a> From<&UserGuard> for Cookie<'a> {
         Cookie::build("auth", serde_json::to_string(user).unwrap())
             .same_site(rocket::http::SameSite::Lax)
             .finish()
+    }
+}
+
+impl From<UserGuard> for Option<dto::user::UserRef> {
+    fn from(user: UserGuard) -> Self {
+        user.username.map(|username| dto::user::UserRef {
+            id: user.id,
+            username,
+        })
+    }
+}
+
+impl From<UserGuard> for dto::user::UserIdOrUsername<'static> {
+    fn from(user: UserGuard) -> Self {
+        Self::Id(user.id)
     }
 }
 

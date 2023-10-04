@@ -5,6 +5,14 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct SystemRef {
+    pub id: i32,
+    pub slug: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SystemListItem {
     pub id: i32,
     pub slug: String,

@@ -9,11 +9,16 @@ pub mod sql_types {
 diesel::table! {
     artifacts (id) {
         id -> Int4,
+        #[max_length = 255]
         filename -> Varchar,
+        #[max_length = 255]
+        mime_type -> Varchar,
         created_at -> Timestamp,
-        sha256 -> Nullable<Bytea>,
-        sha512 -> Nullable<Bytea>,
+        md5 -> Bytea,
+        sha256 -> Bytea,
+        sha512 -> Bytea,
         size -> Int4,
+        #[max_length = 255]
         download_url -> Nullable<Varchar>,
     }
 }
@@ -29,15 +34,15 @@ diesel::table! {
     core_releases (id) {
         id -> Int4,
         version -> Varchar,
-        notes -> Nullable<Text>,
+        notes -> Text,
         date_released -> Timestamp,
-        prerelease -> Nullable<Bool>,
-        yanked -> Nullable<Bool>,
+        prerelease -> Bool,
+        yanked -> Bool,
         links -> Jsonb,
+        metadata -> Jsonb,
         uploader_id -> Int4,
         core_id -> Int4,
         platform_id -> Int4,
-        owner_team_id -> Int4,
     }
 }
 
@@ -59,6 +64,13 @@ diesel::table! {
         links -> Jsonb,
         system_id -> Int4,
         owner_team_id -> Int4,
+    }
+}
+
+diesel::table! {
+    files (id) {
+        id -> Int4,
+        data -> Bytea,
     }
 }
 
@@ -94,13 +106,13 @@ diesel::table! {
     system_releases (id) {
         id -> Int4,
         version -> Varchar,
-        note -> Nullable<Text>,
-        date_released -> Nullable<Timestamp>,
-        date_uploaded -> Timestamp,
-        prerelease -> Nullable<Int4>,
-        yanked -> Nullable<Bool>,
+        note -> Text,
+        date_released -> Timestamp,
+        prerelease -> Bool,
+        yanked -> Bool,
         links -> Jsonb,
-        user_id -> Int4,
+        metadata -> Jsonb,
+        uploader_id -> Int4,
         system_id -> Int4,
     }
 }
@@ -185,19 +197,19 @@ diesel::joinable!(core_release_artifacts -> artifacts (artifact_id));
 diesel::joinable!(core_release_artifacts -> core_releases (core_release_id));
 diesel::joinable!(core_releases -> cores (core_id));
 diesel::joinable!(core_releases -> platforms (platform_id));
-diesel::joinable!(core_releases -> teams (owner_team_id));
 diesel::joinable!(core_releases -> users (uploader_id));
 diesel::joinable!(core_tags -> cores (core_id));
 diesel::joinable!(core_tags -> tags (tag_id));
 diesel::joinable!(cores -> systems (system_id));
 diesel::joinable!(cores -> teams (owner_team_id));
+diesel::joinable!(files -> artifacts (id));
 diesel::joinable!(platform_tags -> platforms (platform_id));
 diesel::joinable!(platform_tags -> tags (tag_id));
 diesel::joinable!(platforms -> teams (owner_team_id));
 diesel::joinable!(system_release_artifacts -> artifacts (artifact_id));
 diesel::joinable!(system_release_artifacts -> system_releases (system_release_id));
 diesel::joinable!(system_releases -> systems (system_id));
-diesel::joinable!(system_releases -> users (user_id));
+diesel::joinable!(system_releases -> users (uploader_id));
 diesel::joinable!(systems -> teams (owner_team_id));
 diesel::joinable!(user_teams -> teams (team_id));
 
@@ -207,6 +219,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     core_releases,
     core_tags,
     cores,
+    files,
     platform_tags,
     platforms,
     system_release_artifacts,

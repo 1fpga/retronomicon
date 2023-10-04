@@ -57,11 +57,11 @@ pub async fn platforms_create(
         description,
         links,
         metadata,
-        team_id,
+        owner_team,
     } = form.into_inner();
 
     // Get team.
-    let team = models::Team::from_id(&mut db, team_id).await?;
+    let team = models::Team::from_id_or_slug(&mut db, owner_team).await?;
 
     let user = user
         .into_model(&mut db)
@@ -70,7 +70,7 @@ pub async fn platforms_create(
 
     // Check permissions.
     let role = user
-        .role_in(&mut db, team_id)
+        .role_in(&mut db, team.id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::Forbidden, "Not a member of the team".to_string()))?;

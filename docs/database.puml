@@ -7,12 +7,14 @@ entity "**artifacts**" {
   ..
   + ""id"": //serial [PK]//
   --
-  *""filename"": //character varying //
+  *""filename"": //character varying(255) //
+  *""mime_type"": //character varying(255) //
   *""created_at"": //timestamp without time zone //
-  ""sha256"": //bytea //
-  ""sha512"": //bytea //
+  *""md5"": //bytea //
+  *""sha256"": //bytea //
+  *""sha512"": //bytea //
   *""size"": //integer //
-  ""download_url"": //character varying //
+  ""download_url"": //character varying(255) //
 }
 
 entity "**core_release_artifacts**" {
@@ -27,15 +29,15 @@ entity "**core_releases**" {
   + ""id"": //serial [PK]//
   --
   *""version"": //character varying //
-  ""notes"": //text //
+  *""notes"": //text //
   *""date_released"": //timestamp without time zone //
-  ""prerelease"": //boolean //
-  ""yanked"": //boolean //
+  *""prerelease"": //boolean //
+  *""yanked"": //boolean //
   *""links"": //jsonb //
+  *""metadata"": //jsonb //
   *""uploader_id"": //integer [FK]//
   *""core_id"": //integer [FK]//
   *""platform_id"": //integer [FK]//
-  *""owner_team_id"": //integer [FK]//
 }
 
 entity "**core_tags**" {
@@ -56,6 +58,14 @@ entity "**cores**" {
   *""links"": //jsonb //
   *""system_id"": //integer [FK]//
   *""owner_team_id"": //integer [FK]//
+}
+
+entity "**files**" {
+  Binary files for storage.
+  ..
+  + ""id"": //serial [PK][FK]//
+  --
+  *""data"": //bytea //
 }
 
 entity "**platform_tags**" {
@@ -89,13 +99,13 @@ entity "**system_releases**" {
   + ""id"": //serial [PK]//
   --
   *""version"": //character varying //
-  ""note"": //text //
-  ""date_released"": //timestamp without time zone //
-  *""date_uploaded"": //timestamp without time zone //
-  ""prerelease"": //integer //
-  ""yanked"": //boolean //
+  *""note"": //text //
+  *""date_released"": //timestamp without time zone //
+  *""prerelease"": //boolean //
+  *""yanked"": //boolean //
   *""links"": //jsonb //
-  *""user_id"": //integer [FK]//
+  *""metadata"": //jsonb //
+  *""uploader_id"": //integer [FK]//
   *""system_id"": //integer [FK]//
 }
 
@@ -170,8 +180,6 @@ entity "**users**" {
 
 "**core_releases**"   }--  "**cores**"
 
-"**core_releases**"   }--  "**teams**"
-
 "**core_releases**"   }--  "**platforms**"
 
 "**core_releases**"   }--  "**users**"
@@ -183,6 +191,8 @@ entity "**users**" {
 "**cores**"   }--  "**teams**"
 
 "**cores**"   }--  "**systems**"
+
+"**files**"  ||-||  "**artifacts**"
 
 "**platform_tags**"   }--  "**platforms**"
 

@@ -1,4 +1,5 @@
 use crate::teams::TeamRef;
+use crate::types::IdOrSlug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -8,6 +9,7 @@ use std::collections::BTreeMap;
 pub struct PlatformRef {
     pub id: i32,
     pub slug: String,
+    pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,14 +48,14 @@ pub struct PlatformCreateRequest<'v> {
     pub description: &'v str,
 
     /// Links to the platform's website, documentation, etc.
-    pub links: Option<BTreeMap<&'v str, String>>,
+    pub links: Option<BTreeMap<&'v str, &'v str>>,
 
     /// Metadata for the platform. No schema is enforced.
     pub metadata: Option<BTreeMap<&'v str, Value>>,
 
     /// The team id who will own the platform. The user must be a member of the
     /// team.
-    pub team_id: i32,
+    pub owner_team: IdOrSlug<'v>,
 }
 
 /// Parameters for creating a new platform.

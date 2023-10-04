@@ -10,6 +10,7 @@ DROP TABLE core_release_artifacts;
 DROP INDEX core_releases_core_id_platform_id_system_id_version_idx;
 DROP TABLE core_releases;
 DROP TABLE cores;
+DROP TABLE files;
 DROP TABLE artifacts;
 
 DROP TABLE tags;

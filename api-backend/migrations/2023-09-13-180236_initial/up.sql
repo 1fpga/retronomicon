@@ -5,21 +5,22 @@ check_function_bodies = false
 CREATE TYPE user_team_role AS ENUM('owner', 'admin', 'member');
 
 CREATE DOMAIN slug varchar(255)
-    CHECK ( value ~ '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$' )
-    CHECK ( value != 'me' AND value != 'owner' AND value != 'all' AND value != 'update' AND value != 'updates' AND value != 'release' AND value != 'releases' )
+    CHECK (
+        value ~ '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$'
+    )
     CONSTRAINT slug_constraint NOT NULL;
 
 CREATE DOMAIN username varchar(255)
-    CHECK ( value ~ '^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$' )
-    CHECK ( value ~ '^.{2,32}$' )
-    CHECK ( value != 'me' )
-    CHECK ( value != 'root' )
-    CHECK ( value != 'admin' )
-    CHECK ( value != 'owner' )
+    CHECK (
+        value ~ '^[a-z]([a-z0-9_.-]*[a-z0-9_])?$'
+    AND value ~ '^.{2,32}$'
+    )
 ;
 
 COMMENT
 ON DOMAIN slug IS 'A URL compatible path component that is unique.';
+COMMENT
+ON DOMAIN username IS 'A username, 2 to 32 characters.';
 
 CREATE TABLE tags
 (
@@ -118,12 +119,14 @@ ON TABLE cores IS
 CREATE TABLE artifacts
 (
     id           SERIAL PRIMARY KEY NOT NULL,
-    filename     varchar            NOT NULL,
+    filename     varchar(255)       NOT NULL,
+    mime_type    varchar(255)       NOT NULL,
     created_at   timestamp          NOT NULL,
-    sha256       bytea,
-    sha512       bytea,
+    md5          bytea              NOT NULL,
+    sha256       bytea              NOT NULL,
+    sha512       bytea              NOT NULL,
     size         integer            NOT NULL,
-    download_url varchar
+    download_url varchar(255)
 );
 
 COMMENT
@@ -134,19 +137,28 @@ ON TABLE artifacts IS
     'checksums.'
 ;
 
+CREATE TABLE files
+(
+    id   SERIAL PRIMARY KEY NOT NULL REFERENCES artifacts(id),
+    data bytea              NOT NULL
+);
+
+COMMENT
+ON TABLE files IS 'Binary files for storage.';
+
 CREATE TABLE core_releases
 (
     id            SERIAL PRIMARY KEY NOT NULL,
     "version"     varchar            NOT NULL,
-    notes         text,
+    notes         text               NOT NULL,
     date_released timestamp          NOT NULL,
-    prerelease    bool,
-    yanked        bool,
+    prerelease    bool               NOT NULL,
+    yanked        bool               NOT NULL,
     links         jsonb              NOT NULL,
+    metadata      jsonb              NOT NULL,
     uploader_id   integer            NOT NULL REFERENCES users,
     core_id       integer            NOT NULL REFERENCES cores,
-    platform_id   integer            NOT NULL REFERENCES platforms,
-    owner_team_id integer            NOT NULL REFERENCES "teams"
+    platform_id   integer            NOT NULL REFERENCES platforms
 );
 
 CREATE UNIQUE INDEX core_releases_core_id_platform_id_system_id_version_idx ON
@@ -170,13 +182,13 @@ CREATE TABLE system_releases
 (
     id            SERIAL PRIMARY KEY NOT NULL,
     "version"     varchar            NOT NULL UNIQUE,
-    note          text,
-    date_released timestamp,
-    date_uploaded timestamp          NOT NULL,
-    prerelease    integer,
-    yanked        bool,
+    note          text               NOT NULL,
+    date_released timestamp          NOT NULL,
+    prerelease    bool               NOT NULL,
+    yanked        bool               NOT NULL,
     links         jsonb              NOT NULL,
-    user_id       integer            NOT NULL REFERENCES users,
+    metadata      jsonb              NOT NULL,
+    uploader_id   integer            NOT NULL REFERENCES users,
     system_id     integer            NOT NULL REFERENCES systems
 );
 
