@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "api-backend",
+    "backend",
     "retronomicon-cli",
     "retronomicon-dto",
 ]

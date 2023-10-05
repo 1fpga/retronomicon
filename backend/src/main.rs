@@ -30,7 +30,7 @@ pub struct RetronomiconConfig {
     pub root_team_id: i32,
 }
 
-#[get("/health")]
+#[get("/healthz")]
 async fn health_handler() -> Result<NoContent, Status> {
     Ok(NoContent)
 }
