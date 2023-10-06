@@ -20,6 +20,7 @@ COPY ./certs /app/certs
 ENV ROCKET_ADDRESS=0.0.0.0
 ENV ROCKET_PORT=8000
 ENV STATIC_ROOT=/app/frontend/build
+ENV DATABASE_CERTS=/app/certs/digitalocean.crt
 EXPOSE 8000
 
 WORKDIR /app
