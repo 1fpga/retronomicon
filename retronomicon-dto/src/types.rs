@@ -63,7 +63,7 @@ impl<'v> IdOrSlug<'v> {
     pub fn parse(value: &'v str) -> Self {
         match value.parse::<i32>() {
             Ok(id) => IdOrSlug::Id(id),
-            Err(_) => IdOrSlug::Slug(value.into()),
+            Err(_) => IdOrSlug::Slug(value),
         }
     }
 

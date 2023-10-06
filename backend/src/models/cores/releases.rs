@@ -29,6 +29,19 @@ pub struct CoreRelease {
 }
 
 impl CoreRelease {
+    pub fn into_ref(self, platform: Platform) -> dto::cores::releases::CoreReleaseRef {
+        dto::cores::releases::CoreReleaseRef {
+            id: self.id,
+            version: self.version,
+            prerelease: self.prerelease,
+            yanked: self.yanked,
+            date_released: self.date_released.timestamp(),
+            platform: platform.into(),
+        }
+    }
+}
+
+impl CoreRelease {
     pub async fn from_id(db: &mut Db, id: i32) -> Result<Option<Self>, diesel::result::Error> {
         schema::core_releases::table
             .filter(schema::core_releases::id.eq(id))

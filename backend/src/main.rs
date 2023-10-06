@@ -12,6 +12,7 @@ use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
 use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
+use tracing::debug;
 
 mod db;
 mod fairings;
@@ -39,10 +40,15 @@ fn database_config() -> impl Provider {
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let pool_size: u32 = str::parse(&env::var("DATABASE_POOL_SIZE").unwrap_or("10".to_string()))
         .expect("Invalid DATABASE_POOL_SIZE");
+    let certs_files: Vec<String> = env::var("DATABASE_CERTS")
+        .ok()
+        .map(|e| e.split(';').map(|c| c.to_string()).collect::<Vec<_>>())
+        .unwrap_or_default();
 
     let db: Map<_, Value> = map! {
         "url" => db_url.into(),
         "pool_size" => pool_size.into(),
+        "certs" => certs_files.into(),
     };
     ("databases", map!["retronomicon_db" => db])
 }
@@ -106,6 +112,8 @@ async fn main() -> Result<(), rocket::Error> {
         });
 
     let prometheus = rocket_prometheus::PrometheusMetrics::new();
+
+    debug!(?figment);
 
     let rocket = rocket::custom(figment);
     let rocket = rocket

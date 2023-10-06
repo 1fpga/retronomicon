@@ -33,7 +33,7 @@ pub struct CoreReleaseFilterParams<'v> {
 }
 
 /// Parameters for paging through a list of items.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PagingParams {

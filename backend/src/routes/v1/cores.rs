@@ -12,25 +12,55 @@ use serde_json::json;
 pub mod releases;
 
 #[openapi(tag = "Cores", ignore = "db")]
-#[get("/cores?<paging..>")]
+#[get("/cores?<filter..>")]
 pub async fn cores_list(
     mut db: Db,
-    paging: dto::params::PagingParams,
+    filter: dto::cores::CoreListQueryParams<'_>,
 ) -> Result<Json<Vec<dto::cores::CoreListItem>>, (Status, String)> {
-    let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
+    let (page, limit) = filter
+        .paging()
+        .validate()
+        .map_err(|e| (Status::BadRequest, e))?;
+
+    let platform = match filter.platform {
+        Some(platform) => Some(models::Platform::from_id_or_slug(&mut db, platform).await?),
+        None => None,
+    };
+    let system = match filter.system {
+        Some(system) => Some(models::System::from_id_or_slug(&mut db, system).await?),
+        None => None,
+    };
+    let team = match filter.owner_team {
+        Some(team) => Some(models::Team::from_id_or_slug(&mut db, team).await?),
+        None => None,
+    };
+    let release = filter
+        .release_date_ge
+        .and_then(|release| chrono::NaiveDateTime::from_timestamp_opt(release, 0));
 
     Ok(Json(
-        models::Core::list_with_teams(&mut db, page, limit)
-            .await
-            .map_err(|e| (Status::InternalServerError, e.to_string()))?
-            .into_iter()
-            .map(|(core, team)| dto::cores::CoreListItem {
+        models::Core::list_with_teams_and_releases(
+            &mut db,
+            page,
+            limit,
+            platform.as_ref(),
+            system.as_ref(),
+            team.as_ref(),
+            release,
+        )
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .into_iter()
+        .map(
+            |(core, team, core_release, platform)| dto::cores::CoreListItem {
                 id: core.id,
                 slug: core.slug,
                 name: core.name,
                 owner_team: team.into(),
-            })
-            .collect(),
+                latest_release: core_release.into_ref(platform),
+            },
+        )
+        .collect(),
     ))
 }
 

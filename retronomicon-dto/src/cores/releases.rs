@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct CoreReleaseListItem {
+pub struct CoreReleaseRef {
     pub id: i32,
     pub version: String,
 
@@ -21,8 +21,16 @@ pub struct CoreReleaseListItem {
     /// Date the release was uploaded to the server, in seconds since UNIX EPOCH.
     pub date_released: i64,
 
-    pub core: CoreRef,
+    /// Which platform was this release made for.
     pub platform: PlatformRef,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct CoreReleaseListItem {
+    #[serde(flatten)]
+    pub release: CoreReleaseRef,
+    pub core: CoreRef,
     pub uploader: UserRef,
 }
 

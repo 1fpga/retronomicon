@@ -8,6 +8,7 @@ use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
 mod releases;
+use crate::models::{Platform, System, Team};
 pub use releases::*;
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -71,6 +72,57 @@ impl Core {
             .offset(page * limit)
             .limit(limit)
             .load::<(Self, models::Team)>(db)
+            .await
+    }
+
+    pub async fn list_with_teams_and_releases(
+        db: &mut Db,
+        page: i64,
+        limit: i64,
+        platform: Option<&Platform>,
+        system: Option<&System>,
+        team: Option<&Team>,
+        release_date_ge: Option<chrono::NaiveDateTime>,
+    ) -> Result<
+        Vec<(Self, models::Team, models::CoreRelease, models::Platform)>,
+        diesel::result::Error,
+    > {
+        let mut query = schema::cores::table
+            .inner_join(schema::teams::table)
+            .inner_join(schema::core_releases::table)
+            .inner_join(
+                schema::platforms::table
+                    .on(schema::platforms::id.eq(schema::core_releases::platform_id)),
+            )
+            .inner_join(schema::systems::table)
+            .into_boxed();
+
+        if let Some(platform) = platform {
+            query = query.filter(schema::platforms::id.eq(platform.id));
+        }
+
+        if let Some(system) = system {
+            query = query.filter(schema::systems::id.eq(system.id));
+        }
+
+        if let Some(team) = team {
+            query = query.filter(schema::teams::id.eq(team.id));
+        }
+
+        if let Some(release_date_ge) = release_date_ge {
+            query = query.filter(schema::core_releases::date_released.ge(release_date_ge));
+        }
+
+        query
+            .select((
+                schema::cores::all_columns,
+                schema::teams::all_columns,
+                schema::core_releases::all_columns,
+                schema::platforms::all_columns,
+            ))
+            .offset(page * limit)
+            .limit(limit)
+            .load::<(Self, models::Team, models::CoreRelease, models::Platform)>(db)
             .await
     }
 

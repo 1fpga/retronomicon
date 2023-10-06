@@ -30,17 +30,12 @@ pub async fn cores_releases_list(
             .into_iter()
             .map(
                 |(release, platform, core, uploader)| dto::cores::releases::CoreReleaseListItem {
-                    id: release.id,
-                    version: release.version,
-                    date_released: release.date_released.timestamp(),
-                    prerelease: release.prerelease,
-                    yanked: release.yanked,
+                    release: release.into_ref(platform),
                     core: dto::cores::CoreRef {
                         id: core.id,
                         slug: core.slug,
                         name: core.name,
                     },
-                    platform: platform.into(),
                     uploader: uploader.into(),
                 },
             )

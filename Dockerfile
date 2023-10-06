@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y libpq-dev libssl-dev ca-certificates
 COPY --from=builder /usr/local/cargo/bin/backend /usr/local/bin/backend
 COPY --from=frontend-builder /app/frontend/build /app/frontend/build
 COPY ./backend/Rocket.toml /app/Rocket.toml
+COPY ./certs /app/certs
 
 ENV ROCKET_ADDRESS=0.0.0.0
 ENV ROCKET_PORT=8000
