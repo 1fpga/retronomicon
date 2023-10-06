@@ -239,7 +239,7 @@ CREATE TABLE user_teams
 -- Create the root group.
 -- Add root user
 INSERT INTO "teams"
-VALUES (1,
+VALUES (DEFAULT,
         'root', 'root',
         'The root team which has administrative right.',
         '{

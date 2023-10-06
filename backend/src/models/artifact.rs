@@ -65,7 +65,7 @@ impl CoreReleaseArtifact {
             .count()
             .get_result::<i64>(db)
             .await
-            .map(|c| c > 0)
+            .map(|c| c == 0)
     }
 }
 
