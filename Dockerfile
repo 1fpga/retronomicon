@@ -1,13 +1,19 @@
 FROM node:20 as frontend-builder
 WORKDIR /app
-COPY . .
+COPY ./frontend /app/frontend
+COPY ./package-lock.json /app/package-lock.json
+COPY ./package.json /app/package.json
 ENV REACT_APP_BACKEND_URL "/api/v1"
 RUN npm install
 RUN cd frontend && npm run build
 
 FROM rust:latest as builder
 WORKDIR /app
-COPY . .
+COPY ./retronomicon-cli /app/retronomicon-cli
+COPY ./retronomicon-dto /app/retronomicon-dto
+COPY ./backend /app/backend
+COPY ./Cargo.toml /app/Cargo.toml
+COPY ./Cargo.lock /app/Cargo.lock
 RUN cargo install --path backend
 
 FROM debian:latest as runner
