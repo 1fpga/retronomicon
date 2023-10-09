@@ -2,8 +2,17 @@
 name = "retronomicon"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "Apache-2.0"
+description = "A tool for managing the retronomicon database, including uploading and downloading artifacts."
+repository = "https://github.com/golem-fpga/retronomicon.git"
+readme = "README.md"
+homepage = "https://retronomicon.land"
+keywords = ["retronomicon", "fpga", "database", "release", "emulation"]
+categories = ["development-tools", "hardware", "emulators"]
+authors = [
+    "Golem-FPGA",
+    "Hans Larsen <hans@retronomicon.dev>"
+]
 
 [dependencies]
 anyhow = "1.0.75"
@@ -12,7 +21,7 @@ clap = { version = "4.3.24", features = [ "derive", "env" ] }
 clap-verbosity-flag = "2.0.1"
 mime_guess2 = "2.0.5"
 reqwest = { version = "0.11.20", features = ["stream", "json", ] }
-retronomicon-dto = { path = "../retronomicon-dto" }
+retronomicon-dto = { path = "../retronomicon-dto", version = "0.1.0" }
 oauth2 = { version = "4.4.1", features = ["reqwest"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"
