@@ -91,6 +91,15 @@ pub enum ReleaseCommand {
 
     /// Download an artifact.
     Download(ReleaseDownloadOpts),
+
+    /// List artifacts.
+    Artifacts(ReleaseArtifactsOpts)
+}
+
+#[derive(Debug, Parser)]
+pub struct ReleaseArtifactsOpts {
+    /// The release's id.
+    release_id: String,
 }
 
 #[derive(Debug, Parser)]
@@ -719,6 +728,23 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
             let request = update_request(
                 client.get(opts.server.join(&format!(
                     "/api/v1/cores/{core}/releases/{release_id}/artifacts/{artifact}/download"
+                ))?),
+                opts,
+                None::<()>,
+            )
+            .build()?;
+
+            let response = client.execute(request).await?.bytes().await?.to_vec();
+            std::io::stdout().write_all(&response)?;
+            Ok(())
+        }
+        ReleaseCommand::Artifacts(ReleaseArtifactsOpts {
+            release_id,
+        }) => {
+            let client = reqwest::Client::new();
+            let request = update_request(
+                client.get(opts.server.join(&format!(
+                    "/api/v1/cores/{core}/releases/{release_id}/artifacts"
                 ))?),
                 opts,
                 None::<()>,
