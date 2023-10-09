@@ -117,7 +117,7 @@ impl<'r> Responder<'r, 'static> for ArtifactDownload {
         response.set_header(ContentType::parse_flexible(&self.mime_type).unwrap());
         response.set_header(Header::new(
             "Content-Disposition",
-            format!("attachment; filename={}", self.filename),
+            format!("attachment; filename=\"{}\"", self.filename),
         ));
 
         Ok(response)
@@ -206,11 +206,14 @@ pub async fn cores_releases_artifacts_list(
             .into_iter()
             .map(|artifact| {
                 let download_url = artifact.download_url.clone().unwrap_or_else(|| {
-                    rocket::uri!(cores_releases_artifacts_download(
-                        &core.slug,
-                        release.id as u32,
-                        artifact.id as u32
-                    ))
+                    rocket::uri!(
+                        "/api/v1/",
+                        cores_releases_artifacts_download(
+                            &core.slug,
+                            release.id as u32,
+                            artifact.id as u32
+                        )
+                    )
                     .to_string()
                 });
 
@@ -257,8 +260,11 @@ impl<'v> rocket::request::FromRequest<'v> for ContentHeaders<'v> {
             }
         };
 
-        let filename = if let Some(m) = FILENAME_RE.find(content_disposition) {
-            m.as_str()
+        let filename = if let Some((_, [filename])) = FILENAME_RE
+            .captures(content_disposition)
+            .map(|x| x.extract())
+        {
+            filename
         } else {
             return Outcome::Failure((
                 Status::BadRequest,
@@ -328,6 +334,13 @@ pub async fn cores_releases_artifacts_upload(
             Status::Conflict,
             "Filename already exists for this release".to_string(),
         ));
+    }
+
+    if !models::CoreReleaseArtifact::is_filename_conform(&mut db, &release, headers.filename)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+    {
+        return Err((Status::BadRequest, "Filename is invalid".to_string()));
     }
 
     let artifact = models::Artifact::create_with_data(

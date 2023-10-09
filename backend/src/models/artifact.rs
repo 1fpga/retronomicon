@@ -67,6 +67,16 @@ impl CoreReleaseArtifact {
             .await
             .map(|c| c == 0)
     }
+
+    pub async fn is_filename_conform(
+        _db: &mut Db,
+        _core_release: &CoreRelease,
+        filename: &str,
+    ) -> Result<bool, diesel::result::Error> {
+        Ok(filename
+            .chars()
+            .all(|c| c.is_alphanumeric() || "()[]{}<>-_+=!@#$%^&*~,. ".contains(c)))
+    }
 }
 
 #[derive(Queryable, Debug, Selectable, Identifiable)]
@@ -173,7 +183,7 @@ impl Artifact {
         release_id: u32,
         artifact_id: u32,
     ) -> Result<(Self, Option<File>), diesel::result::Error> {
-        let artifact =
+        let mut query =
             schema::artifacts::table
                 .inner_join(schema::files::table)
                 .inner_join(schema::core_release_artifacts::table)
@@ -183,12 +193,22 @@ impl Artifact {
                 .inner_join(
                     schema::cores::table.on(schema::cores::id.eq(schema::core_releases::core_id)),
                 )
-                .filter(schema::cores::id.eq(core_id.as_id().unwrap()))
-                .filter(schema::core_releases::id.eq(release_id as i32))
-                .filter(schema::artifacts::id.eq(artifact_id as i32))
-                .select(schema::artifacts::all_columns)
-                .first::<Self>(db)
-                .await?;
+                .into_boxed();
+
+        if let Some(id) = core_id.as_id() {
+            query = query.filter(schema::cores::id.eq(id));
+        } else if let Some(slug) = core_id.as_slug() {
+            query = query.filter(schema::cores::slug.eq(slug));
+        } else {
+            return Err(diesel::result::Error::NotFound);
+        }
+
+        let artifact = query
+            .filter(schema::core_releases::id.eq(release_id as i32))
+            .filter(schema::artifacts::id.eq(artifact_id as i32))
+            .select(schema::artifacts::all_columns)
+            .first::<Self>(db)
+            .await?;
 
         let file = schema::files::table
             .filter(schema::files::id.eq(artifact.id))
