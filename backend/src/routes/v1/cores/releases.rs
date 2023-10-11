@@ -64,7 +64,7 @@ pub async fn cores_releases_create(
     } = input.into_inner();
 
     if version == "latest" {
-        return (Status::BadRequest, "Version cannot be 'latest'".to_string());
+        return Err((Status::BadRequest, "Version cannot be 'latest'".to_string()));
     }
 
     let core = models::Core::from_id_or_slug(&mut db, core_id).await?;
