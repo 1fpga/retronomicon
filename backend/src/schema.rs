@@ -33,6 +33,7 @@ diesel::table! {
 diesel::table! {
     core_releases (id) {
         id -> Int4,
+        #[max_length = 255]
         version -> Varchar,
         notes -> Text,
         date_released -> Timestamp,
