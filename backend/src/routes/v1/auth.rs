@@ -1,5 +1,5 @@
 use crate::guards::users::UserGuard;
-use crate::routes::auth::{GitHubUserInfo, GoogleUserInfo};
+use crate::routes::auth::{GitHubUserInfo, GoogleUserInfo, PatreonUserInfo};
 use crate::RetronomiconConfig;
 use rocket::http::CookieJar;
 use rocket::response::Redirect;
@@ -20,6 +20,13 @@ use rocket_okapi::openapi;
 #[get("/login/github")]
 pub async fn github_login(oauth2: OAuth2<GitHubUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
     oauth2.get_redirect(cookies, &["user:read"]).unwrap()
+}
+
+/// Login using Patreon with OAuth2.
+#[openapi(tag = "Authentication", ignore = "oauth2")]
+#[get("/login/patreon")]
+pub async fn patreon_login(oauth2: OAuth2<PatreonUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
+    oauth2.get_redirect(cookies, &["identity[email]"]).unwrap()
 }
 
 /// Login using Google with OAuth2. This will redirect the user to GitHub's login

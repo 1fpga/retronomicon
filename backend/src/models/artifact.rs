@@ -98,6 +98,7 @@ pub struct Artifact {
     pub sha256: Vec<u8>,
     pub size: i32,
     pub download_url: Option<String>,
+    pub sha1: Vec<u8>,
 }
 
 impl Artifact {
@@ -108,6 +109,7 @@ impl Artifact {
         data: &[u8],
     ) -> Result<Self, diesel::result::Error> {
         let md5 = md5::compute(data).to_vec();
+        let sha1 = sha1::Sha1::digest(data).to_vec();
         let sha256 = sha2::Sha256::digest(data).to_vec();
 
         let artifact = diesel::insert_into(schema::artifacts::table)
@@ -118,6 +120,7 @@ impl Artifact {
                 schema::artifacts::md5.eq(md5),
                 schema::artifacts::sha256.eq(sha256),
                 schema::artifacts::size.eq(data.len() as i32),
+                schema::artifacts::sha1.eq(sha1),
             ))
             .returning(schema::artifacts::all_columns)
             .get_result::<Self>(db)

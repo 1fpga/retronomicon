@@ -19,6 +19,7 @@ diesel::table! {
         size -> Int4,
         #[max_length = 255]
         download_url -> Nullable<Varchar>,
+        sha1 -> Bytea,
     }
 }
 

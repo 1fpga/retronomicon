@@ -1,4 +1,3 @@
-use rocket::form::ValueField;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::ops::Bound;
@@ -33,7 +32,7 @@ impl<'v, T> rocket::form::FromFormField<'v> for RangeParams<T>
 where
     T: Send + Copy + FromStr,
 {
-    fn from_value(field: ValueField<'v>) -> rocket::form::Result<'v, Self> {
+    fn from_value(field: rocket::form::ValueField<'v>) -> rocket::form::Result<'v, Self> {
         Ok(Self::from_str(field.value).map_err(|_| field.unexpected())?)
     }
 }

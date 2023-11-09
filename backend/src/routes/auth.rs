@@ -11,6 +11,7 @@ use rocket_db_pools::diesel::AsyncConnection;
 use rocket_oauth2::TokenResponse;
 use scoped_futures::ScopedFutureExt;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 async fn login_(
     mut db: Db,
@@ -93,6 +94,8 @@ pub async fn github_callback(
         .await
         .context("failed to deserialize response")?;
 
+    eprintln!("github: {:#?}", json);
+
     // Use the token to retrieve the user's GitHub account information.
     let user_info: GitHubUserInfo = serde_json::from_str(&json.to_string()).unwrap();
 
@@ -135,6 +138,7 @@ pub async fn google_callback(
         .json()
         .await
         .context("failed to deserialize response")?;
+    eprintln!("github: {:#?}", json);
 
     // Use the token to retrieve the user's Google account information.
     let user_info: GoogleUserInfo = serde_json::from_str(&json.to_string()).unwrap();
@@ -147,4 +151,65 @@ pub async fn google_callback(
     } else {
         Err(Debug(Error::msg("failed to get email")))
     }
+}
+
+#[derive(serde::Deserialize)]
+pub struct PatreonUserInfoData {
+    id: String,
+    r#type: String,
+    attributes: BTreeMap<String, Value>,
+}
+
+/// User information to be retrieved from the Patreon OAuth API.
+#[derive(serde::Deserialize)]
+pub struct PatreonUserInfo {
+    errors: Option<Vec<Value>>,
+    data: Option<PatreonUserInfoData>,
+}
+
+#[get("/auth/patreon")]
+pub async fn patreon_callback(
+    db: Db,
+    token: TokenResponse<PatreonUserInfo>,
+    cookies: &CookieJar<'_>,
+    frontend_config: &State<RetronomiconConfig>,
+) -> Result<Redirect, Debug<Error>> {
+    let json: Value = reqwest::Client::builder()
+        .build()
+        .context("failed to build reqwest client")?
+        .get("https://api.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email")
+        .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
+        .send()
+        .await
+        .context("failed to complete request")?
+        .json()
+        .await
+        .context("failed to deserialize response")?;
+    let user_info: PatreonUserInfo = serde_json::from_str(&json.to_string()).unwrap();
+
+    if let Some(err) = user_info.errors {
+        return Err(Debug(Error::msg(format!(
+            "failed to get email: {:#?}",
+            err
+        ))));
+    }
+    let data = match user_info.data {
+        Some(data) => data,
+        None => {
+            return Err(Debug(Error::msg("failed to get email")));
+        }
+    };
+    let email = match data.attributes.get("email") {
+        Some(email) => match email.as_str() {
+            Some(email) => email,
+            None => {
+                return Err(Debug(Error::msg("invalid email type")));
+            }
+        },
+        None => {
+            return Err(Debug(Error::msg("no email")));
+        }
+    };
+
+    login_(db, cookies, frontend_config, None, email, "patreon").await
 }

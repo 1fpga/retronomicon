@@ -14,6 +14,7 @@ pub fn routes() -> Vec<rocket::Route> {
     openapi_get_routes![
         auth::github_login,
         auth::google_login,
+        auth::patreon_login,
         auth::logout,
         cores::cores_create,
         cores::cores_details,

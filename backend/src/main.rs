@@ -153,6 +153,7 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(prometheus)
         .attach(OAuth2::<routes::auth::GitHubUserInfo>::fairing("github"))
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
+        .attach(OAuth2::<routes::auth::PatreonUserInfo>::fairing("patreon"))
         .attach(fairings::cors::Cors)
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 

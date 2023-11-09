@@ -28,6 +28,13 @@ client_id = "<USE_ENV_VARS>"
 client_secret = "<USE_ENV_VARS>"
 redirect_uri = "http://localhost:8000/api/auth/google"
 
+[default.oauth.patreon]
+auth_uri = "https://www.patreon.com/oauth2/authorize"
+token_uri = "https://www.patreon.com/api/oauth2/token"
+client_id = "<USE_ENV_VARS>"
+client_secret = "<USE_ENV_VARS>"
+redirect_uri = "http://localhost:8000/api/auth/patreon"
+
 #[default.oauth.microsoft]
 #provider = "Microsoft"
 #client_id = "<USE_ENV_VARS>"

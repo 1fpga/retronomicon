@@ -46,7 +46,8 @@ function App() {
       <header className="App-header">
         <p>
           <a href={process.env.REACT_APP_BACKEND_URL + "/login/google"}>Login using Google</a><br/>
-          <a href={process.env.REACT_APP_BACKEND_URL + "/login/github"}>Login using Github</a>
+          <a href={process.env.REACT_APP_BACKEND_URL + "/login/github"}>Login using Github</a><br/>
+          <a href={process.env.REACT_APP_BACKEND_URL + "/login/patreon"}>Login using Patreon</a>
         </p>
         <button onClick={() => axios.get(process.env.REACT_APP_BACKEND_URL + "/logout").then(() => getUser())}>Logout</button>
         <p>

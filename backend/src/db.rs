@@ -1,6 +1,7 @@
 use diesel::PgConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use rocket_db_pools::{Connection, Database};
+use tracing::info;
 
 pub mod ssl_pool;
 
@@ -23,7 +24,11 @@ pub fn run_migrations() {
     //
     // See the documentation for `MigrationHarness` for
     // all available methods.
-    connection
+    let all_migrations = connection
         .run_pending_migrations(MIGRATIONS)
         .expect("Could not run migrations");
+
+    for migration in all_migrations {
+        info!("Migration: {}", migration);
+    }
 }
