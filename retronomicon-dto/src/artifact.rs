@@ -15,9 +15,6 @@ pub struct ArtifactChecksum<'v> {
 
     /// SHA256 checksum of the file, in hexadecimal.
     pub sha256: Option<&'v str>,
-
-    /// SHA512 checksum of the file, in hexadecimal.
-    pub sha512: Option<&'v str>,
 }
 
 /// The content being uploaded. Either a file, or the checksums of a file
@@ -42,7 +39,6 @@ pub struct CoreReleaseArtifactListItem {
     pub created_at: i64,
     pub md5: String,
     pub sha256: String,
-    pub sha512: String,
     pub size: i32,
     pub download_url: Option<String>,
 }

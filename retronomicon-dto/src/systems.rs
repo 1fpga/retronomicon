@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 pub struct SystemRef {
     pub id: i32,
     pub slug: String,
-    pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

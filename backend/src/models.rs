@@ -20,6 +20,9 @@ pub use artifact::*;
 pub mod cores;
 pub use cores::*;
 
+pub mod games;
+pub use games::*;
+
 pub mod platforms;
 pub use platforms::*;
 

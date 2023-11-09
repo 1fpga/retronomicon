@@ -60,6 +60,10 @@ impl<'v> std::fmt::Display for IdOrSlug<'v> {
 }
 
 impl<'v> IdOrSlug<'v> {
+    pub fn root_team() -> Self {
+        Self::Slug("root")
+    }
+
     pub fn parse(value: &'v str) -> Self {
         match value.parse::<i32>() {
             Ok(id) => IdOrSlug::Id(id),

@@ -16,7 +16,6 @@ diesel::table! {
         created_at -> Timestamp,
         md5 -> Bytea,
         sha256 -> Bytea,
-        sha512 -> Bytea,
         size -> Int4,
         #[max_length = 255]
         download_url -> Nullable<Varchar>,
@@ -72,6 +71,30 @@ diesel::table! {
     files (id) {
         id -> Int4,
         data -> Bytea,
+    }
+}
+
+diesel::table! {
+    game_artifacts (game_id, artifact_id) {
+        game_id -> Int4,
+        artifact_id -> Int4,
+    }
+}
+
+diesel::table! {
+    games (id) {
+        id -> Int4,
+        #[max_length = 255]
+        name -> Varchar,
+        description -> Varchar,
+        #[max_length = 255]
+        short_description -> Varchar,
+        year -> Int4,
+        publisher -> Varchar,
+        developer -> Varchar,
+        links -> Jsonb,
+        system_id -> Int4,
+        system_unique_id -> Int4,
     }
 }
 
@@ -204,6 +227,9 @@ diesel::joinable!(core_tags -> tags (tag_id));
 diesel::joinable!(cores -> systems (system_id));
 diesel::joinable!(cores -> teams (owner_team_id));
 diesel::joinable!(files -> artifacts (id));
+diesel::joinable!(game_artifacts -> artifacts (artifact_id));
+diesel::joinable!(game_artifacts -> games (game_id));
+diesel::joinable!(games -> systems (system_id));
 diesel::joinable!(platform_tags -> platforms (platform_id));
 diesel::joinable!(platform_tags -> tags (tag_id));
 diesel::joinable!(platforms -> teams (owner_team_id));
@@ -221,6 +247,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     core_tags,
     cores,
     files,
+    game_artifacts,
+    games,
     platform_tags,
     platforms,
     system_release_artifacts,

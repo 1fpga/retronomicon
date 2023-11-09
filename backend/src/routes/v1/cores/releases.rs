@@ -19,7 +19,7 @@ pub async fn cores_releases_list(
     mut db: Db,
     core_id: dto::types::IdOrSlug<'_>,
     paging: dto::params::PagingParams,
-    filter: dto::params::CoreReleaseFilterParams<'_>,
+    filter: dto::cores::releases::CoreReleaseFilterParams<'_>,
 ) -> Result<Json<Vec<dto::cores::releases::CoreReleaseListItem>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
@@ -228,7 +228,6 @@ pub async fn cores_releases_artifacts_list(
                     created_at: artifact.created_at.timestamp(),
                     md5: hex::encode(artifact.md5),
                     sha256: hex::encode(artifact.sha256),
-                    sha512: hex::encode(artifact.sha512),
                     size: artifact.size,
                     download_url: Some(download_url),
                 }

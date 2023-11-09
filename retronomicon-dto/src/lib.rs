@@ -4,6 +4,7 @@ pub mod types;
 
 pub mod artifact;
 pub mod cores;
+pub mod games;
 pub mod platforms;
 pub mod systems;
 pub mod tags;

@@ -96,7 +96,6 @@ pub struct Artifact {
     pub created_at: NaiveDateTime,
     pub md5: Vec<u8>,
     pub sha256: Vec<u8>,
-    pub sha512: Vec<u8>,
     pub size: i32,
     pub download_url: Option<String>,
 }
@@ -110,7 +109,6 @@ impl Artifact {
     ) -> Result<Self, diesel::result::Error> {
         let md5 = md5::compute(data).to_vec();
         let sha256 = sha2::Sha256::digest(data).to_vec();
-        let sha512 = sha2::Sha512::digest(data).to_vec();
 
         let artifact = diesel::insert_into(schema::artifacts::table)
             .values((
@@ -119,7 +117,6 @@ impl Artifact {
                 schema::artifacts::mime_type.eq(mime_type),
                 schema::artifacts::md5.eq(md5),
                 schema::artifacts::sha256.eq(sha256),
-                schema::artifacts::sha512.eq(sha512),
                 schema::artifacts::size.eq(data.len() as i32),
             ))
             .returning(schema::artifacts::all_columns)
@@ -142,7 +139,6 @@ impl Artifact {
         mime_type: &str,
         md5: Option<&[u8]>,
         sha256: Option<&[u8]>,
-        sha512: Option<&[u8]>,
         download_url: Option<&str>,
         size: i32,
     ) -> Result<Self, diesel::result::Error> {
@@ -153,7 +149,6 @@ impl Artifact {
                 schema::artifacts::mime_type.eq(mime_type),
                 schema::artifacts::md5.eq(md5.unwrap_or(&[])),
                 schema::artifacts::sha256.eq(sha256.unwrap_or(&[])),
-                schema::artifacts::sha512.eq(sha512.unwrap_or(&[])),
             ))
             .returning(schema::artifacts::all_columns)
             .get_result::<Self>(db)

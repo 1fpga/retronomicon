@@ -4,6 +4,7 @@ use crate::{models, schema};
 use diesel::prelude::*;
 use diesel::{Identifiable, Queryable};
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
@@ -46,7 +47,6 @@ impl From<System> for dto::systems::SystemRef {
         Self {
             id: value.id,
             slug: value.slug,
-            name: value.name,
         }
     }
 }
@@ -99,5 +99,16 @@ impl System {
             ))
             .get_result(db)
             .await
+    }
+
+    pub async fn get(db: &mut Db, id: IdOrSlug<'_>) -> Result<Option<Self>, diesel::result::Error> {
+        let mut query = schema::systems::table.into_boxed();
+        if let Some(id) = id.as_id() {
+            query = query.filter(schema::systems::dsl::id.eq(id));
+        } else if let Some(slug) = id.as_slug() {
+            query = query.filter(schema::systems::dsl::slug.eq(slug));
+        }
+
+        query.first::<Self>(db).await.optional()
     }
 }

@@ -12,7 +12,6 @@ entity "**artifacts**" {
   *""created_at"": //timestamp without time zone //
   *""md5"": //bytea //
   *""sha256"": //bytea //
-  *""sha512"": //bytea //
   *""size"": //integer //
   ""download_url"": //character varying(255) //
 }
@@ -28,7 +27,7 @@ entity "**core_releases**" {
   ..
   + ""id"": //serial [PK]//
   --
-  *""version"": //character varying //
+  *""version"": //version_number //
   *""notes"": //text //
   *""date_released"": //timestamp without time zone //
   *""prerelease"": //boolean //
@@ -66,6 +65,28 @@ entity "**files**" {
   + ""id"": //serial [PK][FK]//
   --
   *""data"": //bytea //
+}
+
+entity "**game_artifacts**" {
+  + ""game_id"": //integer [PK][FK]//
+  + ""artifact_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**games**" {
+  A table of games/roms that can be run (or implemented by) cores.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""name"": //character varying(255) //
+  *""description"": //character varying //
+  *""short_description"": //character varying(255) //
+  *""year"": //integer //
+  *""publisher"": //character varying //
+  *""developer"": //character varying //
+  *""links"": //jsonb //
+  *""system_id"": //integer [FK]//
+  *""system_unique_id"": //integer //
 }
 
 entity "**platform_tags**" {
@@ -193,6 +214,12 @@ entity "**users**" {
 "**cores**"   }--  "**systems**"
 
 "**files**"  ||-||  "**artifacts**"
+
+"**game_artifacts**"   }--  "**artifacts**"
+
+"**game_artifacts**"   }--  "**games**"
+
+"**games**"   }--  "**systems**"
 
 "**platform_tags**"   }--  "**platforms**"
 

@@ -9,6 +9,7 @@ use diesel::result::Error;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};

@@ -85,7 +85,7 @@ impl CoreRelease {
         core_id: dto::types::IdOrSlug<'_>,
         page: i64,
         limit: i64,
-        _filter: dto::params::CoreReleaseFilterParams<'_>,
+        _filter: dto::cores::releases::CoreReleaseFilterParams<'_>,
     ) -> Result<Vec<(Self, Platform, Core, User)>, diesel::result::Error> {
         let mut query = schema::core_releases::table
             .inner_join(schema::platforms::table)

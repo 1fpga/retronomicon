@@ -2,6 +2,7 @@ use rocket_okapi::openapi_get_routes;
 
 mod auth;
 mod cores;
+mod games;
 mod me;
 mod platforms;
 mod systems;
@@ -23,6 +24,8 @@ pub fn routes() -> Vec<rocket::Route> {
         cores::releases::cores_releases_artifacts_upload,
         cores::releases::cores_releases_create,
         cores::releases::cores_releases_list,
+        games::games_create,
+        games::games_list,
         me::me,
         me::me_token,
         me::me_update,

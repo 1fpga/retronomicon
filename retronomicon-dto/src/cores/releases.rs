@@ -6,6 +6,30 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
+/// Parameters for filtering a list of core releases.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct CoreReleaseFilterParams<'v> {
+    /// Whether to include prereleases in the results. Defaults to false.
+    pub prerelease: Option<bool>,
+
+    /// Whether to include yanked releases in the results. Defaults to false.
+    pub yanked: Option<bool>,
+
+    /// Minimum date to include in the results, in seconds since UNIX EPOCH.
+    /// Defaults to 0 (all releases).
+    pub min_release_date: Option<i64>,
+
+    /// Maximum date to include in the results, in seconds since UNIX EPOCH.
+    /// Defaults to i64::MAX (all releases).
+    pub max_release_date: Option<i64>,
+
+    /// Filter releases by platform. By default, include all platforms.
+    #[serde(borrow)]
+    pub platform: Option<IdOrSlug<'v>>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreReleaseRef {
