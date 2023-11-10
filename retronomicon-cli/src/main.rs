@@ -93,7 +93,7 @@ pub enum ReleaseCommand {
     Download(ReleaseDownloadOpts),
 
     /// List artifacts.
-    Artifacts(ReleaseArtifactsOpts)
+    Artifacts(ReleaseArtifactsOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -705,13 +705,14 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
             let release_id = response.id;
             for path in &create_opts.files {
                 info!("Uploading file '{path:?}'...");
-                let _response: dto::Ok = upload(
+                let response: Value = upload(
                     Method::POST,
                     &format!("/api/v1/cores/{core}/releases/{release_id}/artifacts"),
                     opts,
                     path,
                 )
                 .await?;
+                output_json(&response, opts)?;
             }
             info!("Done.");
 
@@ -738,9 +739,7 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
             std::io::stdout().write_all(&response)?;
             Ok(())
         }
-        ReleaseCommand::Artifacts(ReleaseArtifactsOpts {
-            release_id,
-        }) => {
+        ReleaseCommand::Artifacts(ReleaseArtifactsOpts { release_id }) => {
             let client = reqwest::Client::new();
             let request = update_request(
                 client.get(opts.server.join(&format!(

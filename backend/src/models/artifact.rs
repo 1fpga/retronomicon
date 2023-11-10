@@ -141,6 +141,7 @@ impl Artifact {
         filename: &str,
         mime_type: &str,
         md5: Option<&[u8]>,
+        sha1: Option<&[u8]>,
         sha256: Option<&[u8]>,
         download_url: Option<&str>,
         size: i32,
@@ -151,7 +152,9 @@ impl Artifact {
                 schema::artifacts::filename.eq(filename),
                 schema::artifacts::mime_type.eq(mime_type),
                 schema::artifacts::md5.eq(md5.unwrap_or(&[])),
+                schema::artifacts::sha1.eq(sha1.unwrap_or(&[])),
                 schema::artifacts::sha256.eq(sha256.unwrap_or(&[])),
+                schema::artifacts::size.eq(size),
             ))
             .returning(schema::artifacts::all_columns)
             .get_result::<Self>(db)

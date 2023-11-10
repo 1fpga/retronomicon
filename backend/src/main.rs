@@ -155,6 +155,9 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(OAuth2::<routes::auth::PatreonUserInfo>::fairing("patreon"))
         .attach(fairings::cors::Cors)
+        .manage(guards::storage::StorageState {
+            region: env::var("AWS_REGION").expect("AWS_REGION environment variable must be set"),
+        })
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 
     rocket.launch().await?;

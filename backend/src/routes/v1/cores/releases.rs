@@ -2,7 +2,9 @@ use crate::db::Db;
 use crate::types::FetchModel;
 use crate::utils::acls;
 use crate::{guards, models};
+use once_cell::sync::Lazy;
 use retronomicon_dto as dto;
+use rocket::data::ToByteUnit;
 use rocket::http::{ContentType, Header, Status};
 use rocket::request::Outcome;
 use rocket::response::Responder;
@@ -10,6 +12,7 @@ use rocket::serde::json::Json;
 use rocket::{get, post, Data, Request, Response};
 use rocket_okapi::openapi;
 use serde_json::json;
+use sha1::Digest;
 use std::io::Cursor;
 use std::path::PathBuf;
 
@@ -236,9 +239,6 @@ pub async fn cores_releases_artifacts_list(
     ))
 }
 
-use once_cell::sync::Lazy;
-use rocket::data::ToByteUnit;
-
 static FILENAME_RE: Lazy<regex::Regex> =
     Lazy::new(|| regex::Regex::new(r#".*filename="(.*)""#).unwrap());
 
@@ -295,16 +295,22 @@ impl<'v> rocket::request::FromRequest<'v> for ContentHeaders<'v> {
 /// Upload an artifact to a release. This can be done multiple times.
 /// The upload will be refused if the user does not have permission to
 /// upload artifacts to the release's core.
-#[openapi(tag = "Core Releases", ignore = "db", ignore = "headers")]
+#[openapi(
+    tag = "Core Releases",
+    ignore = "db",
+    ignore = "headers",
+    ignore = "storage"
+)]
 #[post("/cores/<core_id>/releases/<release_id>/artifacts", data = "<file>")]
 pub async fn cores_releases_artifacts_upload(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,
     headers: ContentHeaders<'_>,
+    storage: guards::storage::CoreBucketStorage,
     core_id: dto::types::IdOrSlug<'_>,
     release_id: u32,
     file: Data<'_>,
-) -> Result<Json<dto::Ok>, (Status, String)> {
+) -> Result<Json<dto::artifact::ArtifactCreateResponse>, (Status, String)> {
     // Check the uploader's role.
     let core = models::Core::from_id_or_slug(&mut db, core_id).await?;
 
@@ -323,15 +329,13 @@ pub async fn cores_releases_artifacts_upload(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::NotFound, "Release not found".to_string()))?;
 
+    let filename = headers.filename;
+
     // Make sure the filename is unique.
     // TODO: figure out if we can make this check in the database itself.
-    if !models::CoreReleaseArtifact::is_filename_unique_for_release(
-        &mut db,
-        &release,
-        headers.filename,
-    )
-    .await
-    .map_err(|e| (Status::InternalServerError, e.to_string()))?
+    if !models::CoreReleaseArtifact::is_filename_unique_for_release(&mut db, &release, filename)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
     {
         return Err((
             Status::Conflict,
@@ -339,22 +343,43 @@ pub async fn cores_releases_artifacts_upload(
         ));
     }
 
-    if !models::CoreReleaseArtifact::is_filename_conform(&mut db, &release, headers.filename)
+    if !models::CoreReleaseArtifact::is_filename_conform(&mut db, &release, filename)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
     {
         return Err((Status::BadRequest, "Filename is invalid".to_string()));
     }
 
-    let artifact = models::Artifact::create_with_data(
+    let file = file
+        .open(30.megabytes())
+        .into_bytes()
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    let md5 = md5::compute(file.as_slice()).to_vec();
+    let sha1 = sha1::Sha1::digest(file.as_slice()).to_vec();
+    let sha256 = sha2::Sha256::digest(file.as_slice()).to_vec();
+
+    let content_type = headers.content_type.to_string();
+    // Upload to storage.
+    let download_url = storage
+        .upload(
+            &format!("{}/{}/{}", core.slug, release.version, filename),
+            file.as_slice(),
+            &content_type,
+        )
+        .await
+        .map_err(|e| (Status::InternalServerError, e))?;
+
+    let artifact = models::Artifact::create_with_checksum(
         &mut db,
-        headers.filename,
-        &headers.content_type.to_string(),
-        file.open(20.megabytes())
-            .into_bytes()
-            .await
-            .map_err(|e| (Status::InternalServerError, e.to_string()))?
-            .as_slice(),
+        filename,
+        &content_type,
+        Some(&md5),
+        Some(&sha1),
+        Some(&sha256),
+        Some(&download_url),
+        file.len() as i32,
     )
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
@@ -362,5 +387,8 @@ pub async fn cores_releases_artifacts_upload(
     models::CoreReleaseArtifact::create(&mut db, &release, &artifact)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
-    Ok(Json(dto::Ok))
+    Ok(Json(dto::artifact::ArtifactCreateResponse {
+        id: artifact.id,
+        url: Some(download_url),
+    }))
 }

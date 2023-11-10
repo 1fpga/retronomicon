@@ -32,7 +32,11 @@ impl Fairing for Cors {
                     .host_str()
                     .map_or(String::new(), |s| s.to_string());
                 match host.as_str() {
-                    "retronomicon.dev" | "retronomicon.com" | "api.retronomicon.com" => {
+                    "retronomicon.dev"
+                    | "retronomicon.com"
+                    | "api.retronomicon.com"
+                    | "retronomicon.land"
+                    | "www.retronomicon.land" => {
                         response.set_header(Header::new("Access-Control-Allow-Origin", host));
                     }
                     #[cfg(debug_assertions)]

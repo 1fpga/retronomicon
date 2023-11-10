@@ -155,8 +155,6 @@ pub async fn google_callback(
 
 #[derive(serde::Deserialize)]
 pub struct PatreonUserInfoData {
-    id: String,
-    r#type: String,
     attributes: BTreeMap<String, Value>,
 }
 

@@ -30,6 +30,17 @@ pub enum ArtifactData<'v> {
     Checksums(ArtifactChecksum<'v>),
 }
 
+/// The result of creating a new artifact.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct ArtifactCreateResponse {
+    /// The ID of the artifact.
+    pub id: i32,
+
+    /// A URL to download it if there was an uploaded file.
+    pub url: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreReleaseArtifactListItem {

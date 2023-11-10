@@ -20,6 +20,7 @@ regex = "1.9.5"
 reqwest = { version = "0.11.20", default-features = false, features = ["json", "rustls-tls"] }
 retronomicon-dto = { path = "../retronomicon-dto", features = ["rocket"] }
 rocket_oauth2 = { version = "0.5.0-rc.2", features = ["hyper_rustls_adapter"] }
+rust-s3 = "0.34.0-rc4"
 scoped-futures = "0.1.3"
 serde = { version = "1.0.186", features = ["derive"] }
 serde_json = "1.0.64"
