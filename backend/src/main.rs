@@ -155,8 +155,11 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(OAuth2::<routes::auth::PatreonUserInfo>::fairing("patreon"))
         .attach(fairings::cors::Cors)
-        .manage(guards::storage::StorageState {
+        .manage(guards::storage::StorageConfig {
             region: env::var("AWS_REGION").expect("AWS_REGION environment variable must be set"),
+            cores_bucket: env::var("AWS_CORES_BUCKET").unwrap_or("retronomicon-cores".to_string()),
+            cores_url_base: env::var("AWS_CORES_URL_BASE")
+                .unwrap_or("https://cores.retronomicon.land".to_string()),
         })
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
 

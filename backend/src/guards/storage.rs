@@ -1,20 +1,20 @@
+use reqwest::Url;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
-use s3::bucket_ops::CannedBucketAcl;
 use s3::creds::Credentials;
 use s3::error::S3Error;
+use s3::Bucket;
 use s3::Region;
-use s3::{Bucket, BucketConfiguration};
 
-pub mod buckets;
-pub use buckets::*;
-
-pub struct StorageState {
+#[derive(Clone)]
+pub struct StorageConfig {
     pub region: String,
+    pub cores_bucket: String,
+    pub cores_url_base: String,
 }
 
 pub struct Storage {
-    region: String,
+    config: StorageConfig,
 }
 
 #[rocket::async_trait]
@@ -24,7 +24,7 @@ impl<'a> FromRequest<'a> for Storage {
     async fn from_request(
         request: &'a rocket::Request<'_>,
     ) -> rocket::request::Outcome<Self, Self::Error> {
-        let state = match request.rocket().state::<StorageState>() {
+        let config = match request.rocket().state::<StorageConfig>() {
             Some(storage) => storage,
             None => {
                 return Outcome::Failure((
@@ -35,44 +35,61 @@ impl<'a> FromRequest<'a> for Storage {
         };
 
         Outcome::Success(Self {
-            region: state.region.clone(),
+            config: config.clone(),
         })
     }
 }
 
 impl Storage {
-    pub async fn bucket(&self, bucket_name: &str, public: bool) -> Result<Bucket, S3Error> {
+    async fn bucket(&self, bucket_name: &str, public: bool) -> Result<Bucket, S3Error> {
         let credentials = Credentials::default()?;
-
         let region = Region::Custom {
             region: "eu-central-1".to_owned(),
-            endpoint: self.region.clone(),
+            endpoint: self.config.region.clone(),
         };
 
         let mut bucket =
             Bucket::new(bucket_name, region.clone(), credentials.clone())?.with_path_style();
 
-        if !bucket.exists().await? {
-            let config = if public {
-                BucketConfiguration::private()
-            } else {
-                BucketConfiguration::new(
-                    Some(CannedBucketAcl::PublicRead),
-                    false,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            };
-            rocket::info!("Creating S3 bucket: {}", bucket_name);
-            bucket = Bucket::create_with_path_style(bucket_name, region, credentials, config)
-                .await?
-                .bucket;
+        if public {
+            bucket.add_header("x-amz-acl", "public-read");
         }
 
         Ok(bucket)
+    }
+
+    pub async fn upload_core(
+        &self,
+        filename: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        let bucket = self
+            .bucket(&self.config.cores_bucket, true)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let response = match bucket
+            .put_object_with_content_type(&filename, data, content_type)
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                rocket::error!("Failed to upload file to S3: {}", e);
+                return Err(e.to_string());
+            }
+        };
+
+        if response.status_code() != 200 {
+            rocket::error!("Failed to upload file to S3: {}", response.status_code());
+            return Err(format!(
+                "Failed to upload file to S3: {}",
+                response.status_code()
+            ));
+        }
+
+        let url = Url::parse(&format!("{}/{}", self.config.cores_url_base, filename)).unwrap();
+
+        Ok(url.to_string())
     }
 }

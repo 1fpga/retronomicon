@@ -306,7 +306,7 @@ pub async fn cores_releases_artifacts_upload(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,
     headers: ContentHeaders<'_>,
-    storage: guards::storage::CoreBucketStorage,
+    storage: guards::storage::Storage,
     core_id: dto::types::IdOrSlug<'_>,
     release_id: u32,
     file: Data<'_>,
@@ -363,7 +363,7 @@ pub async fn cores_releases_artifacts_upload(
     let content_type = headers.content_type.to_string();
     // Upload to storage.
     let download_url = storage
-        .upload(
+        .upload_core(
             &format!("{}/{}/{}", core.slug, release.version, filename),
             file.as_slice(),
             &content_type,
