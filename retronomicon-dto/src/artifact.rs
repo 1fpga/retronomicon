@@ -1,33 +1,43 @@
+use crate::encodings::{Base64String, HexString};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 /// Checksum of an artifact. There needs to be at least one checksum.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct ArtifactChecksum<'v> {
+pub struct ArtifactChecksum {
     /// Optional URL containing the data.
-    pub download_url: Option<&'v str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<Url>,
 
     /// Size of the file in bytes. Files cannot be larger than 20MB.
     pub size: i32,
 
     /// MD5 checksum of the file, in hexadecimal.
-    pub md5: Option<&'v str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub md5: Option<HexString>,
+
+    /// SHA1 checksum of the file, in hexadecimal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<HexString>,
 
     /// SHA256 checksum of the file, in hexadecimal.
-    pub sha256: Option<&'v str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<HexString>,
 }
 
 /// The content being uploaded. Either a file, or the checksums of a file
 /// to be validated against the download.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub enum ArtifactData<'v> {
+#[serde(untagged)]
+pub enum ArtifactData {
     /// Base64 encoded data of the file. Checksums will be generated automatically.
     /// Files cannot be larger than 20MB.
-    Data(&'v str),
+    Data(Base64String),
 
     /// Checksums of the data, with the data available somewhere else.
-    Checksums(ArtifactChecksum<'v>),
+    Checksums(ArtifactChecksum),
 }
 
 /// The result of creating a new artifact.
@@ -52,4 +62,28 @@ pub struct CoreReleaseArtifactListItem {
     pub sha256: String,
     pub size: i32,
     pub download_url: Option<String>,
+}
+
+#[test]
+fn artifact_data_1() {
+    let data = ArtifactData::Data(b"data".into());
+    let json = serde_json::to_string(&data).unwrap();
+    assert_eq!(json, r#""ZGF0YQ""#);
+    let data2: ArtifactData = serde_json::from_str(&json).unwrap();
+    assert_eq!(data, data2);
+}
+
+#[test]
+fn artifact_data_2() {
+    let data = ArtifactData::Checksums(ArtifactChecksum {
+        download_url: None,
+        size: 123,
+        md5: Some(b"abc".into()),
+        sha1: Some(b"def".into()),
+        sha256: None,
+    });
+    let json = serde_json::to_string(&data).unwrap();
+    assert_eq!(json, r#"{"size":123,"md5":"616263","sha1":"646566"}"#);
+    let data2: ArtifactData = serde_json::from_str(&json).unwrap();
+    assert_eq!(data, data2);
 }

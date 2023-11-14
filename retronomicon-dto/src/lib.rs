@@ -1,3 +1,4 @@
+pub mod encodings;
 pub mod error;
 pub mod params;
 pub mod types;
@@ -10,6 +11,9 @@ pub mod systems;
 pub mod tags;
 pub mod teams;
 pub mod user;
+
+#[cfg(feature = "client")]
+pub mod client;
 
 /// The expected response of an end point that does not return anything.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

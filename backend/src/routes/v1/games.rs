@@ -1,24 +1,21 @@
 use crate::db::Db;
-use crate::utils::acls;
 use crate::{guards, models};
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use rocket::{get, post};
+use rocket::{get, post, put};
+use rocket_db_pools::diesel::AsyncConnection;
 use rocket_okapi::openapi;
+use scoped_futures::ScopedFutureExt;
 use serde_json::json;
 
 #[openapi(tag = "Games", ignore = "db")]
 #[post("/games", format = "application/json", data = "<form>")]
 pub async fn games_create(
     mut db: Db,
-    user: guards::users::AuthenticatedUserGuard,
+    _root_user: guards::users::RootUserGuard,
     form: Json<dto::games::GameCreateRequest<'_>>,
 ) -> Result<Json<dto::games::GameCreateResponse>, (Status, String)> {
-    if !acls::can_create_games(&mut db, user.id).await {
-        return Err((Status::Forbidden, "Insufficient permissions".to_string()));
-    }
-
     let dto::games::GameCreateRequest {
         name,
         short_description,
@@ -82,4 +79,102 @@ pub async fn games_list(
             })
             .collect(),
     ))
+}
+
+#[openapi(tag = "Games", ignore = "db")]
+#[get("/games/<game_id>")]
+pub async fn games_details(
+    mut db: Db,
+    game_id: u32,
+) -> Result<Json<dto::games::GameDetails>, (Status, String)> {
+    let (game, system) = models::Game::details(&mut db, game_id as i32)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(dto::games::GameDetails {
+        id: game.id,
+        name: game.name,
+        description: game.description,
+        short_description: game.short_description,
+        year: game.year,
+        publisher: game.publisher,
+        developer: game.developer,
+        links: game.links,
+        system: system.into(),
+        system_unique_id: game.system_unique_id,
+    }))
+}
+
+#[openapi(tag = "Games", ignore = "db")]
+#[put("/games/<game_id>", format = "application/json", data = "<form>")]
+pub async fn games_update(
+    mut db: Db,
+    _root_user: guards::users::RootUserGuard,
+    game_id: u32,
+    form: Json<dto::games::GameUpdateRequest<'_>>,
+) -> Result<Json<dto::Ok>, (Status, String)> {
+    models::Game::update(
+        &mut db,
+        game_id as i32,
+        form.name,
+        form.description,
+        form.short_description,
+        form.year,
+        form.publisher,
+        form.developer,
+        form.add_links.clone(),
+        form.remove_links.clone(),
+        form.system_unique_id,
+    )
+    .await
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(dto::Ok))
+}
+
+#[openapi(tag = "Games", ignore = "db")]
+#[post(
+    "/games/<game_id>/artifacts",
+    format = "application/json",
+    data = "<form>"
+)]
+pub async fn games_add_artifact(
+    mut db: Db,
+    _root_user: guards::users::RootUserGuard,
+    game_id: u32,
+    form: Json<Vec<dto::games::GameAddArtifactRequest<'_>>>,
+) -> Result<Json<dto::Ok>, (Status, String)> {
+    db.transaction(|db| {
+        async move {
+            let game = models::Game::get(db, game_id as i32).await?;
+            let game = match game {
+                Some(g) => g,
+                None => return Ok(None),
+            };
+
+            for a in form.into_inner() {
+                let artifact = models::Artifact::create_with_checksum(
+                    db,
+                    a.filename,
+                    a.mime_type,
+                    a.md5.as_ref().map(|s| s.as_slice()),
+                    a.sha1.as_ref().map(|s| s.as_slice()),
+                    a.sha256.as_ref().map(|s| s.as_slice()),
+                    None,
+                    a.size,
+                )
+                .await?;
+
+                models::GameArtifact::create(db, game.id, artifact.id).await?;
+            }
+
+            Ok(Some(()))
+        }
+        .scope_boxed()
+    })
+    .await
+    .map_err(|e: diesel::result::Error| (Status::InternalServerError, e.to_string()))?
+    .ok_or((Status::NotFound, "Not found".to_string()))?;
+
+    Ok(Json(dto::Ok))
 }

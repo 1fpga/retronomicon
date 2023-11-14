@@ -1,4 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::convert::Infallible;
+use std::str::FromStr;
 use strum::{Display, EnumString};
 
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, EnumString, Display)]
@@ -13,12 +16,23 @@ pub enum UserTeamRole {
 }
 
 /// Either an ID (integer) or a slug (string).
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum IdOrSlug<'v> {
     Id(i32),
-    Slug(&'v str),
+    Slug(Cow<'v, str>),
+}
+
+impl FromStr for IdOrSlug<'static> {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.parse::<i32>() {
+            Ok(id) => IdOrSlug::Id(id),
+            Err(_) => IdOrSlug::Slug(s.to_string().into()),
+        })
+    }
 }
 
 #[cfg(feature = "rocket")]
@@ -61,13 +75,13 @@ impl<'v> std::fmt::Display for IdOrSlug<'v> {
 
 impl<'v> IdOrSlug<'v> {
     pub fn root_team() -> Self {
-        Self::Slug("root")
+        Self::Slug("root".into())
     }
 
     pub fn parse(value: &'v str) -> Self {
         match value.parse::<i32>() {
             Ok(id) => IdOrSlug::Id(id),
-            Err(_) => IdOrSlug::Slug(value),
+            Err(_) => IdOrSlug::Slug(value.into()),
         }
     }
 
@@ -102,6 +116,6 @@ impl From<i32> for IdOrSlug<'_> {
 
 impl<'v> From<&'v str> for IdOrSlug<'v> {
     fn from(slug: &'v str) -> Self {
-        IdOrSlug::Slug(slug)
+        IdOrSlug::Slug(slug.into())
     }
 }

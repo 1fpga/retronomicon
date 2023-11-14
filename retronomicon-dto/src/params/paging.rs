@@ -9,6 +9,7 @@ pub const LIMIT_MAX: i64 = 100;
 
 /// Parameters for paging through a list of items.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "cli", derive(clap::Parser))]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PagingParams {

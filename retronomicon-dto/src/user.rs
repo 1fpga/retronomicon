@@ -2,15 +2,20 @@ use crate::teams::TeamRef;
 use crate::types::UserTeamRole;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::convert::Infallible;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 /// A valid username (not empty, not too long, no special characters).
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct Username<'v>(&'v str);
+pub struct Username<'v>(Cow<'v, str>);
 
 impl<'v> Username<'v> {
-    pub fn new(username: &'v str) -> Result<Self, &'static str> {
+    pub fn new(username: impl Into<Cow<'v, str>>) -> Result<Self, &'static str> {
+        let username = username.into();
         if username.len() < 2 {
             return Err("Username cannot be less than 2 characters");
         }
@@ -36,7 +41,7 @@ impl<'v> Username<'v> {
         Ok(Self(username))
     }
 
-    pub fn into_inner(self) -> &'v str {
+    pub fn into_inner(self) -> Cow<'v, str> {
         self.0
     }
 }
@@ -46,6 +51,14 @@ impl<'v> TryInto<Username<'v>> for &'v str {
 
     fn try_into(self) -> Result<Username<'v>, Self::Error> {
         Username::new(self)
+    }
+}
+
+impl FromStr for Username<'static> {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Cow::Owned(s.to_owned())))
     }
 }
 
@@ -67,13 +80,33 @@ impl<'v> rocket::form::FromFormField<'v> for Username<'v> {
 }
 
 /// A user ID can be either an User ID (as an integer) or a username string.
-#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub enum UserIdOrUsername<'v> {
     Id(i32),
     #[serde(borrow)]
     Username(Username<'v>),
+}
+
+impl<'v> Display for UserIdOrUsername<'v> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UserIdOrUsername::Id(id) => write!(f, "{}", *id),
+            UserIdOrUsername::Username(Username(name)) => f.write_str(name),
+        }
+    }
+}
+
+impl FromStr for UserIdOrUsername<'static> {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.parse::<i32>() {
+            Ok(id) => Self::Id(id),
+            Err(_) => Self::Username(Username::new(s.to_owned())?),
+        })
+    }
 }
 
 impl<'v> UserIdOrUsername<'v> {
@@ -85,7 +118,7 @@ impl<'v> UserIdOrUsername<'v> {
     }
     pub fn as_username(&self) -> Option<&str> {
         match self {
-            UserIdOrUsername::Username(Username(name)) => Some(*name),
+            UserIdOrUsername::Username(Username(name)) => Some(name.as_ref()),
             _ => None,
         }
     }

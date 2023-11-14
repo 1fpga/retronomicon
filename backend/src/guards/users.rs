@@ -283,7 +283,7 @@ impl UserGuard {
 
                 let user = models::User::create(
                     db,
-                    username,
+                    username.as_deref(),
                     None,
                     avatar_url.as_deref(),
                     email,

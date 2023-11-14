@@ -80,7 +80,7 @@ impl User {
         match user_id {
             dto::user::UserIdOrUsername::Id(id) => Self::from_id(db, id).await,
             dto::user::UserIdOrUsername::Username(name) => {
-                Self::from_username(db, name.into_inner()).await
+                Self::from_username(db, name.into_inner().as_ref()).await
             }
         }
     }

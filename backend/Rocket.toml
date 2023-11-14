@@ -12,6 +12,8 @@ root_team_id = 1
 [default.limits]
 # 24 Megabytes
 json = 25165824
+# 48 Megabytes
+file = 50331648
 
 [default.databases]
 # retronomicon_db is set automatically from the env variables.

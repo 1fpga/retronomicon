@@ -21,7 +21,7 @@ clap = { version = "4.3.24", features = [ "derive", "env" ] }
 clap-verbosity-flag = "2.0.1"
 mime_guess2 = "2.0.5"
 reqwest = { version = "0.11.20", features = ["stream", "json", ] }
-retronomicon-dto = { path = "../retronomicon-dto", version = "0.1.0" }
+retronomicon-dto = { path = "../retronomicon-dto", version = "0.1.0", features = ["cli", "client"] }
 oauth2 = { version = "4.4.1", features = ["reqwest"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.105"

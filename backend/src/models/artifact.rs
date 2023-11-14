@@ -150,6 +150,7 @@ impl Artifact {
             .values((
                 schema::artifacts::created_at.eq(chrono::Utc::now().naive_utc()),
                 schema::artifacts::filename.eq(filename),
+                schema::artifacts::download_url.eq(download_url),
                 schema::artifacts::mime_type.eq(mime_type),
                 schema::artifacts::md5.eq(md5.unwrap_or(&[])),
                 schema::artifacts::sha1.eq(sha1.unwrap_or(&[])),
@@ -169,7 +170,6 @@ impl Artifact {
     ) -> Result<Vec<Self>, diesel::result::Error> {
         schema::artifacts::table
             .inner_join(schema::core_release_artifacts::table)
-            .inner_join(schema::files::table)
             .filter(schema::core_release_artifacts::core_release_id.eq(release.id))
             .select(schema::artifacts::all_columns)
             .offset(page * limit)

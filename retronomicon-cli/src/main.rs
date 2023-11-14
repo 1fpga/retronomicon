@@ -2,9 +2,12 @@ use anyhow::Error;
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use clap_verbosity_flag::{InfoLevel, Level as VerbosityLevel};
-use reqwest::{Method, RequestBuilder};
+use reqwest::RequestBuilder;
 use retronomicon_dto as dto;
+use retronomicon_dto::client::ClientConfig;
+use retronomicon_dto::params::RangeParams;
 use retronomicon_dto::types::IdOrSlug;
+use retronomicon_dto::user::UserIdOrUsername;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -58,6 +61,9 @@ enum Command {
     /// System commands.
     Systems(SystemOpts),
 
+    /// Games commands.
+    Games(GamesOpts),
+
     /// Team commands.
     Teams(TeamOpts),
 
@@ -100,6 +106,9 @@ pub enum ReleaseCommand {
 pub struct ReleaseArtifactsOpts {
     /// The release's id.
     release_id: String,
+
+    #[clap(flatten)]
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -114,7 +123,7 @@ pub struct ReleaseDownloadOpts {
 #[derive(Debug, Parser)]
 pub struct ReleaseListOpts {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -185,7 +194,7 @@ pub enum CoreCommand {
 #[derive(Debug, Parser)]
 pub struct CoresListOpts {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -220,11 +229,117 @@ pub struct CoreCreateOpts {
 #[derive(Debug, Parser)]
 pub struct CoreGetOpts {
     /// The core's slug or numerical id.
-    id: String,
+    id: IdOrSlug<'static>,
 }
 
 #[derive(Debug, Parser)]
 pub struct CoreUpdateOpts {}
+
+#[derive(Debug, Parser)]
+pub struct GamesOpts {
+    #[command(subcommand)]
+    pub command: GamesCommand,
+}
+
+#[derive(Debug, Parser)]
+pub enum GamesCommand {
+    List(GamesListOpts),
+    Create(GameCreateOpts),
+    // Get(GameGetOpts),
+    // Update(GameUpdateOpts),
+    AddArtifact(GameAddArtifactOpts),
+}
+
+#[derive(Debug, Parser)]
+pub struct GamesListOpts {
+    #[clap(flatten)]
+    paging: dto::params::PagingParams,
+
+    /// Filter by system.
+    #[clap(long)]
+    system: Option<IdOrSlug<'static>>,
+
+    /// Filter by year.
+    #[clap(long)]
+    year: Option<RangeParams<i32>>,
+
+    /// Filter by name, exact substring.
+    #[clap(long)]
+    name: Option<String>,
+}
+
+impl GamesListOpts {
+    pub fn as_dto(&self) -> dto::games::GameListQueryParams {
+        dto::games::GameListQueryParams {
+            paging: self.paging.clone(),
+            system: self.system.clone(),
+            year: self.year.clone(),
+            name: self.name.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct GameCreateOpts {
+    /// The name of the game to create. Must be unique.
+    name: String,
+
+    #[clap(long)]
+    description: String,
+
+    #[clap(long)]
+    short_description: String,
+
+    #[clap(long)]
+    year: u32,
+
+    #[clap(long)]
+    publisher: String,
+
+    #[clap(long)]
+    developer: String,
+
+    /// Game's links. This is a key-value pair, separated by an equal sign.
+    #[clap(long)]
+    links: Vec<String>,
+
+    /// The system that owns the game. The user must be an admin of this team.
+    /// Can be a slug or a numerical id.
+    #[clap(long)]
+    system: IdOrSlug<'static>,
+
+    /// The unique identifier for the game in the system.
+    #[clap(long)]
+    system_unique_id: u32,
+}
+
+impl GameCreateOpts {
+    pub fn as_dto(&self) -> dto::games::GameCreateRequest<'_> {
+        dto::games::GameCreateRequest {
+            name: &self.name,
+            description: &self.description,
+            short_description: &self.short_description,
+            year: self.year as i32,
+            publisher: &self.publisher,
+            developer: &self.developer,
+            links: links_dictionary_from_arg(&self.links).unwrap_or_default(),
+            system: self.system.clone(),
+            system_unique_id: self.system_unique_id as i32,
+        }
+    }
+}
+
+#[derive(Debug, Parser)]
+pub struct GameAddArtifactOpts {
+    /// The game's slug or numerical id.
+    game: IdOrSlug<'static>,
+
+    /// The release's slug or numerical id.
+    release: String,
+
+    /// The artifact's path.
+    path: PathBuf,
+}
 
 #[derive(Debug, Parser)]
 pub struct TeamOpts {
@@ -247,7 +362,7 @@ pub enum TeamCommand {
 #[derive(Debug, Parser)]
 pub struct TeamsListOpts {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -313,7 +428,7 @@ pub enum PlatformCommand {
 #[derive(Debug, Parser)]
 pub struct PlatformsListOpts {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -368,7 +483,7 @@ pub struct SystemGetOpts {
 #[derive(Debug, Parser)]
 pub struct SystemsListOpts {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
@@ -401,30 +516,9 @@ pub struct SystemCreateOpts {
 }
 
 #[derive(Debug, Parser)]
-pub struct PagingParams {
-    /// The page to download.
-    #[clap(long)]
-    page: Option<u32>,
-    /// The maximum number of items to return.
-    #[clap(long)]
-    limit: Option<u32>,
-}
-
-impl PagingParams {
-    pub fn to_query(&self) -> String {
-        match (self.page, self.limit) {
-            (None, None) => "".to_string(),
-            (Some(page), None) => format!("page={page}"),
-            (None, Some(limit)) => format!("limit={limit}"),
-            (Some(page), Some(limit)) => format!("page={page}&limit={limit}"),
-        }
-    }
-}
-
-#[derive(Debug, Parser)]
 pub struct UpdateUser {
     /// Who to update (defaults to the current user, can be ).
-    pub user: Option<String>,
+    pub user: Option<UserIdOrUsername<'static>>,
 
     /// The new username.
     #[clap(long)]
@@ -447,13 +541,13 @@ pub struct UpdateUser {
 #[derive(Debug, Parser)]
 pub struct UsersList {
     #[clap(flatten)]
-    paging: PagingParams,
+    paging: dto::params::PagingParams,
 }
 
 #[derive(Debug, Parser)]
 pub struct UserGet {
     /// The user's name or numerical id.
-    id: String,
+    id: UserIdOrUsername<'static>,
 }
 
 fn output_json<J: Serialize>(value: J, opts: &Opts) -> Result<(), anyhow::Error> {
@@ -512,6 +606,16 @@ fn metadata_dictionary_from_arg(
     }
 }
 
+fn client(opts: &Opts) -> dto::client::V1Client {
+    dto::client::V1Client::new(
+        opts.server.clone(),
+        ClientConfig {
+            token: opts.token.as_deref(),
+        },
+    )
+    .unwrap()
+}
+
 async fn send<Q, R>(
     method: reqwest::Method,
     path: &str,
@@ -558,121 +662,32 @@ where
     send(reqwest::Method::POST, path, opts, request).await
 }
 
-async fn put<Q, R>(path: &str, opts: &Opts, request: Q) -> Result<R, Error>
-where
-    Q: Serialize,
-    R: for<'de> Deserialize<'de>,
-{
-    send(reqwest::Method::PUT, path, opts, request).await
-}
-
-async fn upload<R>(
-    method: reqwest::Method,
-    path: &str,
-    opts: &Opts,
-    file_path: &Path,
-) -> Result<R, Error>
-where
-    R: for<'de> Deserialize<'de>,
-{
-    let file = tokio::fs::File::open(file_path).await?;
-
-    let client = reqwest::Client::new();
-    let request = update_request(
-        client.request(method, opts.server.join(path)?),
-        opts,
-        Option::<()>::None,
-    )
-    .header(
-        reqwest::header::CONTENT_DISPOSITION,
-        format!(
-            "attachment; filename=\"{}\"",
-            file_path.file_name().unwrap().to_string_lossy()
-        ),
-    )
-    .header(
-        reqwest::header::CONTENT_TYPE,
-        mime_guess2::from_ext(&file_path.extension().unwrap().to_string_lossy())
-            .first_raw()
-            .unwrap_or("application/octet-stream"),
-    )
-    .body(file)
-    .build()?;
-
-    let response = client.execute(request).await?;
-
-    if response.status().is_success() {
-        response.json().await.map_err(Into::into)
-    } else {
-        Err(Error::msg(format!(
-            "Status code: {}\n{}",
-            response.status(),
-            response.text().await?
-        )))
-    }
-}
-
 async fn whoami(opts: &Opts) -> Result<(), anyhow::Error> {
     let response: dto::user::UserDetails = get("/api/v1/me", opts).await?;
     output_json(response, opts)
 }
 
-async fn user_update(
-    opts: &Opts,
-    _user_opts: &UserOpts,
-    UpdateUser {
-        user,
-        username,
-        description,
-        add_link,
-        remove_link,
-    }: &UpdateUser,
-) -> Result<(), anyhow::Error> {
-    let url = if let Some(u) = user {
-        format!("/api/v1/user/{u}")
-    } else {
-        "/api/v1/me/update".to_string()
-    };
-
-    let remove_links = if remove_link.is_empty() {
-        None
-    } else {
-        Some(remove_link.iter().map(|x| x.as_str()).collect())
-    };
-
-    let response: dto::Ok = put(
-        &url,
-        opts,
-        dto::user::UserUpdate {
-            username: username.as_deref(),
-            display_name: None,
-            description: description.as_deref(),
-            add_links: links_dictionary_from_arg(add_link),
-            remove_links,
-            ..Default::default()
-        },
-    )
-    .await?;
-    output_json(response, opts)
+fn to_query(paging: &dto::params::PagingParams) -> String {
+    match (paging.page, paging.limit) {
+        (None, None) => "".to_string(),
+        (Some(page), None) => format!("page={page}"),
+        (None, Some(limit)) => format!("limit={limit}"),
+        (Some(page), Some(limit)) => format!("page={page}&limit={limit}"),
+    }
 }
 
 async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyhow::Error> {
     let core = IdOrSlug::parse(&release_opts.core);
 
     match &release_opts.command {
-        ReleaseCommand::List(list_opts) => {
-            let query = format!(
-                "/api/v1/cores/{core}/releases?{}",
-                list_opts.paging.to_query()
-            );
-
-            let response: Vec<dto::cores::releases::CoreReleaseListItem> =
-                get(&query, opts).await?;
-            output_json(response, opts)
+        ReleaseCommand::List(ReleaseListOpts { paging }) => {
+            output_json(client(opts).cores_releases(&core, paging).await?, opts)
         }
         ReleaseCommand::Create(create_opts) => {
+            let client = client(opts);
+
             info!("Creating the release...");
-            let date_released = match &create_opts.date_released {
+            let date_released = match create_opts.date_released.as_ref() {
                 None => None,
                 Some(x) => Some(
                     chrono::DateTime::parse_from_rfc3339(x)
@@ -684,35 +699,33 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
                         .timestamp(),
                 ),
             };
-            let response: dto::cores::releases::CoreReleaseCreateResponse = post(
-                &format!("/api/v1/cores/{core}/releases"),
-                opts,
-                dto::cores::releases::CoreReleaseCreateRequest {
-                    version: &create_opts.version,
-                    notes: &create_opts.notes,
-                    date_released,
-                    prerelease: create_opts.prerelease,
-                    links: links_dictionary_from_arg(&create_opts.links).unwrap_or_default(),
-                    metadata: metadata_dictionary_from_arg(&create_opts.metadata)?
-                        .unwrap_or_default(),
-                    platform: IdOrSlug::parse(&create_opts.platform),
-                },
-            )
-            .await?;
+            let response: dto::cores::releases::CoreReleaseCreateResponse = client
+                .cores_releases_create(
+                    &core,
+                    &dto::cores::releases::CoreReleaseCreateRequest {
+                        version: &create_opts.version,
+                        notes: &create_opts.notes,
+                        date_released,
+                        prerelease: create_opts.prerelease,
+                        links: links_dictionary_from_arg(&create_opts.links).unwrap_or_default(),
+                        metadata: metadata_dictionary_from_arg(&create_opts.metadata)?
+                            .unwrap_or_default(),
+                        platform: IdOrSlug::parse(&create_opts.platform),
+                    },
+                )
+                .await?;
 
             output_json(&response, opts)?;
 
             let release_id = response.id;
             for path in &create_opts.files {
-                info!("Uploading file '{path:?}'...");
-                let response: Value = upload(
-                    Method::POST,
-                    &format!("/api/v1/cores/{core}/releases/{release_id}/artifacts"),
+                info!(?path, "Uploading");
+                output_json(
+                    client
+                        .cores_releases_artifacts_upload(&core, release_id, path)
+                        .await?,
                     opts,
-                    path,
-                )
-                .await?;
-                output_json(&response, opts)?;
+                )?;
             }
             info!("Done.");
 
@@ -739,21 +752,12 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
             std::io::stdout().write_all(&response)?;
             Ok(())
         }
-        ReleaseCommand::Artifacts(ReleaseArtifactsOpts { release_id }) => {
-            let client = reqwest::Client::new();
-            let request = update_request(
-                client.get(opts.server.join(&format!(
-                    "/api/v1/cores/{core}/releases/{release_id}/artifacts"
-                ))?),
-                opts,
-                None::<()>,
-            )
-            .build()?;
-
-            let response = client.execute(request).await?.bytes().await?.to_vec();
-            std::io::stdout().write_all(&response)?;
-            Ok(())
-        }
+        ReleaseCommand::Artifacts(ReleaseArtifactsOpts { release_id, paging }) => output_json(
+            client(opts)
+                .cores_releases_artifacts(&core, release_id.parse::<i32>().unwrap(), paging)
+                .await?,
+            opts,
+        ),
     }
 }
 
@@ -762,16 +766,11 @@ async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
         CoreCommand::Releases(release_opts) => release(&opts, release_opts).await,
 
         CoreCommand::List(list_opts) => {
-            let query = format!("/api/v1/cores?{}", list_opts.paging.to_query());
-
-            let response: Vec<dto::cores::CoreListItem> = get(&query, opts).await?;
-            output_json(response, opts)
+            output_json(client(opts).cores(&list_opts.paging).await?, opts)
         }
-        CoreCommand::Create(create_opts) => {
-            let response: dto::cores::CoreCreateResponse = post(
-                "/api/v1/cores",
-                opts,
-                dto::cores::CoreCreateRequest {
+        CoreCommand::Create(create_opts) => output_json(
+            client(opts)
+                .cores_create(&dto::cores::CoreCreateRequest {
                     name: &create_opts.name,
                     slug: &create_opts.slug,
                     description: &create_opts.description,
@@ -780,15 +779,12 @@ async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
                         .unwrap_or_default(),
                     system: IdOrSlug::parse(&create_opts.system),
                     owner_team: IdOrSlug::parse(&create_opts.team),
-                },
-            )
-            .await?;
-            output_json(response, opts)
-        }
+                })
+                .await?,
+            opts,
+        ),
         CoreCommand::Get(CoreGetOpts { id }) => {
-            let response: dto::cores::CoreDetailsResponse =
-                get(&format!("/api/v1/cores/{id}"), opts).await?;
-            output_json(response, opts)
+            output_json(client(opts).cores_details(id).await?, opts)
         }
         CoreCommand::Update(CoreUpdateOpts {}) => {
             todo!()
@@ -796,19 +792,47 @@ async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
     }
 }
 
+impl<'v> From<&'v UpdateUser> for dto::user::UserUpdate<'v> {
+    fn from(
+        UpdateUser {
+            username,
+            description,
+            add_link,
+            remove_link,
+            ..
+        }: &'v UpdateUser,
+    ) -> Self {
+        dto::user::UserUpdate {
+            username: username.as_deref(),
+            display_name: None,
+            description: description.as_deref(),
+            add_links: links_dictionary_from_arg(add_link),
+            remove_links: if remove_link.is_empty() {
+                None
+            } else {
+                Some(remove_link.iter().map(|x| x.as_str()).collect())
+            },
+            ..Default::default()
+        }
+    }
+}
+
 async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
     match &user_opts.command {
-        UserCommand::Update(update_opts) => user_update(opts, user_opts, update_opts).await,
+        UserCommand::Update(update_opts) => {
+            let update = update_opts.into();
+            match &update_opts.user {
+                None => output_json(client(opts).me_update(&update).await?, opts),
+                Some(user_id) => {
+                    output_json(client(opts).users_update(user_id, &update).await?, opts)
+                }
+            }
+        }
         UserCommand::List(UsersList { paging }) => {
-            let query = format!("/api/v1/users?{}", paging.to_query());
-
-            let response: Vec<dto::user::UserRef> = get(&query, opts).await?;
-            output_json(response, opts)
+            output_json(client(opts).users(paging).await?, opts)
         }
         UserCommand::Get(UserGet { id }) => {
-            let response: dto::user::UserDetails =
-                get(&format!("/api/v1/users/{}", id), opts).await?;
-            output_json(response, opts)
+            output_json(client(opts).users_details(id).await?, opts)
         }
     }
 }
@@ -816,7 +840,7 @@ async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
 async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyhow::Error> {
     match &platform_opts.command {
         PlatformCommand::List(list_opts) => {
-            let query = format!("/api/v1/platforms?{}", list_opts.paging.to_query());
+            let query = format!("/api/v1/platforms?{}", to_query(&list_opts.paging));
 
             let response: Vec<dto::platforms::Platform> = get(&query, opts).await?;
             output_json(response, opts)
@@ -843,7 +867,7 @@ async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyho
 async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Error> {
     match &system_opts.command {
         SystemCommand::List(list_opts) => {
-            let query = format!("/api/v1/systems?{}", list_opts.paging.to_query());
+            let query = format!("/api/v1/systems?{}", to_query(&list_opts.paging));
 
             let response: Vec<dto::systems::SystemListItem> = get(&query, opts).await?;
             output_json(response, opts)
@@ -886,7 +910,7 @@ async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Err
 async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
     match &team_opts.command {
         TeamCommand::List(list_opts) => {
-            let query = format!("/api/v1/teams?{}", list_opts.paging.to_query());
+            let query = format!("/api/v1/teams?{}", to_query(&list_opts.paging));
             let response: Vec<dto::teams::TeamRef> = get(&query, opts).await?;
             output_json(response, opts)
         }
@@ -919,6 +943,18 @@ async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
     }
 }
 
+async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
+    match &game_opts.command {
+        GamesCommand::List(list_opts) => {
+            output_json(client(opts).games(&list_opts.as_dto()).await?, opts)
+        }
+        GamesCommand::Create(create_opts) => output_json(
+            client(opts).games_create(&create_opts.as_dto()).await?,
+            opts,
+        ),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let opts = Opts::parse();
@@ -945,6 +981,7 @@ async fn main() {
         Command::Users(user_opts) => user(&opts, user_opts).await,
         Command::Whoami => whoami(&opts).await,
         Command::Cores(core_opts) => core(&opts, core_opts).await,
+        Command::Games(games_opts) => game(&opts, games_opts).await,
     };
 
     match result {
