@@ -16,10 +16,12 @@ pub struct PagingParams {
     /// The page index to retrieve. The first page is 0. This will
     /// multiply by the limit to get the actual item offset.
     /// Defaults to 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub page: Option<i64>,
 
     /// The maximum number of items to retrieve. Must be between 10
     /// and 100. Defaults to 20.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
 }
 

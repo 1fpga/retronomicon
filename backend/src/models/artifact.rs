@@ -87,7 +87,7 @@ pub struct File {
     pub data: Vec<u8>,
 }
 
-#[derive(Queryable, Debug, Selectable, Identifiable)]
+#[derive(Clone, Queryable, Debug, Selectable, Identifiable)]
 #[diesel(table_name = schema::artifacts)]
 pub struct Artifact {
     pub id: i32,
@@ -99,6 +99,43 @@ pub struct Artifact {
     pub size: i32,
     pub download_url: Option<String>,
     pub sha1: Vec<u8>,
+}
+
+impl From<Artifact> for dto::artifact::ArtifactRef {
+    fn from(
+        Artifact {
+            md5,
+            sha256,
+            size,
+            download_url,
+            sha1,
+            ..
+        }: Artifact,
+    ) -> Self {
+        Self {
+            download_url: download_url.into(),
+            size: if let Ok(size) = (size as u32).try_into() {
+                Some(size)
+            } else {
+                None
+            },
+            md5: if md5.is_empty() {
+                None
+            } else {
+                Some(md5.into())
+            },
+            sha1: if sha1.is_empty() {
+                None
+            } else {
+                Some(sha1.into())
+            },
+            sha256: if sha256.is_empty() {
+                None
+            } else {
+                Some(sha256.into())
+            },
+        }
+    }
 }
 
 impl Artifact {

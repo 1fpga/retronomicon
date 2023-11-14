@@ -1,9 +1,10 @@
 use crate::db::Db;
-use crate::models::System;
+use crate::models::{Artifact, System};
 use crate::{models, schema};
 use diesel::deserialize::FromSql;
 use diesel::prelude::*;
 use diesel::{AsExpression, FromSqlRow};
+use retronomicon_dto::artifact::ArtifactRef;
 use retronomicon_dto::types::IdOrSlug;
 use rocket::http::Status;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
@@ -92,11 +93,19 @@ impl Game {
         system: Option<IdOrSlug<'_>>,
         year: (Bound<i32>, Bound<i32>),
         name: Option<&str>,
-    ) -> Result<Vec<(Self, System)>, diesel::result::Error> {
+        md5: Vec<Vec<u8>>,
+        sha1: Vec<Vec<u8>>,
+        sha256: Vec<Vec<u8>>,
+    ) -> Result<Vec<(Self, System, Option<Artifact>)>, diesel::result::Error> {
         use schema::games::dsl;
 
         let mut query = schema::games::table
             .inner_join(schema::systems::table)
+            .left_join(schema::game_artifacts::table)
+            .left_join(
+                schema::artifacts::table
+                    .on(schema::artifacts::id.eq(schema::game_artifacts::artifact_id)),
+            )
             .into_boxed();
 
         if let Some(system) = system {
@@ -125,11 +134,25 @@ impl Game {
             query = query.filter(dsl::name.ilike(format!("%{}%", name)));
         }
 
+        if !md5.is_empty() {
+            query = query.filter((schema::artifacts::dsl::md5).eq_any(md5));
+        }
+        if !sha1.is_empty() {
+            query = query.filter((schema::artifacts::dsl::sha1).eq_any(sha1));
+        }
+        if !sha256.is_empty() {
+            query = query.filter((schema::artifacts::dsl::sha256).eq_any(sha256));
+        }
+
         query
             .order_by(dsl::name.asc())
             .offset(page * limit)
             .limit(limit)
-            .select((schema::games::all_columns, schema::systems::all_columns))
+            .select((
+                schema::games::all_columns,
+                schema::systems::all_columns,
+                Option::<Artifact>::as_select(),
+            ))
             .load(db)
             .await
     }

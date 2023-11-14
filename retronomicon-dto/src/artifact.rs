@@ -1,6 +1,27 @@
 use crate::encodings::{Base64String, HexString};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 use url::Url;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct ArtifactRef {
+    /// Optional URL to download this artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub download_url: Option<String>,
+
+    pub size: Option<NonZeroU32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub md5: Option<HexString>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<HexString>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<HexString>,
+}
 
 /// Checksum of an artifact. There needs to be at least one checksum.
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -56,12 +77,10 @@ pub struct ArtifactCreateResponse {
 pub struct CoreReleaseArtifactListItem {
     pub id: i32,
     pub filename: String,
+    pub download_url: String,
     pub mime_type: String,
     pub created_at: i64,
-    pub md5: String,
-    pub sha256: String,
-    pub size: i32,
-    pub download_url: Option<String>,
+    pub r#ref: ArtifactRef,
 }
 
 #[test]

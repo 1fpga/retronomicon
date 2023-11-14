@@ -8,6 +8,7 @@ use rocket_db_pools::diesel::AsyncConnection;
 use rocket_okapi::openapi;
 use scoped_futures::ScopedFutureExt;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 #[openapi(tag = "Games", ignore = "db")]
 #[post("/games", format = "application/json", data = "<form>")]
@@ -51,10 +52,11 @@ pub async fn games_create(
 }
 
 #[openapi(tag = "Games", ignore = "db")]
-#[get("/games?<filter..>")]
+#[get("/games?<filter..>", format = "application/json", data = "<form>")]
 pub async fn games_list(
     mut db: Db,
     filter: dto::games::GameListQueryParams<'_>,
+    form: Json<dto::games::GameListBody>,
 ) -> Result<Json<Vec<dto::games::GameListItemResponse>>, (Status, String)> {
     let (page, limit) = filter
         .paging
@@ -64,21 +66,59 @@ pub async fn games_list(
     let year = filter.year.unwrap_or_default().into();
     let name = filter.name.as_deref();
 
-    Ok(Json(
-        models::Game::list(&mut db, page, limit, filter.system, year, name)
-            .await
-            .map_err(|e| (Status::InternalServerError, e.to_string()))?
-            .into_iter()
-            .map(|(game, system)| dto::games::GameListItemResponse {
-                id: game.id,
-                name: game.name,
-                short_description: game.short_description,
-                year: game.year,
-                system_id: system.into(),
-                system_unique_id: game.system_unique_id,
-            })
-            .collect(),
-    ))
+    let mut result = BTreeMap::new();
+    let form = form.into_inner();
+    let md5 = form
+        .md5
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.into())
+        .collect();
+    let sha1 = form
+        .sha1
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.into())
+        .collect();
+    let sha256 = form
+        .sha256
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.into())
+        .collect();
+
+    for (g, s, a) in models::Game::list(
+        &mut db,
+        page,
+        limit,
+        filter.system,
+        year,
+        name,
+        md5,
+        sha1,
+        sha256,
+    )
+    .await
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?
+    .into_iter()
+    {
+        let entry = result
+            .entry(g.id)
+            .or_insert_with(|| dto::games::GameListItemResponse {
+                id: g.id,
+                name: g.name,
+                short_description: g.short_description,
+                year: g.year,
+                system_id: s.into(),
+                system_unique_id: g.system_unique_id,
+                artifacts: vec![],
+            });
+        if let Some(a) = a {
+            entry.artifacts.push(a.into());
+        }
+    }
+
+    Ok(Json(result.into_values().collect::<Vec<_>>()))
 }
 
 #[openapi(tag = "Games", ignore = "db")]
@@ -155,7 +195,7 @@ pub async fn games_add_artifact(
             for a in form.into_inner() {
                 let artifact = models::Artifact::create_with_checksum(
                     db,
-                    a.filename,
+                    "",
                     a.mime_type,
                     a.md5.as_ref().map(|s| s.as_slice()),
                     a.sha1.as_ref().map(|s| s.as_slice()),

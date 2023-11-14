@@ -5,6 +5,7 @@ use clap_verbosity_flag::{InfoLevel, Level as VerbosityLevel};
 use reqwest::RequestBuilder;
 use retronomicon_dto as dto;
 use retronomicon_dto::client::ClientConfig;
+use retronomicon_dto::encodings::HexString;
 use retronomicon_dto::params::RangeParams;
 use retronomicon_dto::types::IdOrSlug;
 use retronomicon_dto::user::UserIdOrUsername;
@@ -12,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::{debug, info, Level};
 use tracing_subscriber::fmt::Subscriber;
 use url::Url;
@@ -266,15 +267,46 @@ pub struct GamesListOpts {
     /// Filter by name, exact substring.
     #[clap(long)]
     name: Option<String>,
+
+    /// Filter by md5, exact substring.
+    #[clap(long)]
+    md5: Vec<HexString>,
+
+    /// Filter by sha1, exact substring.
+    #[clap(long)]
+    sha1: Vec<HexString>,
+
+    /// Filter by sha256, exact substring.
+    #[clap(long)]
+    sha256: Vec<HexString>,
 }
 
 impl GamesListOpts {
     pub fn as_dto(&self) -> dto::games::GameListQueryParams {
         dto::games::GameListQueryParams {
-            paging: self.paging.clone(),
+            paging: self.paging,
             system: self.system.clone(),
-            year: self.year.clone(),
+            year: self.year,
             name: self.name.clone(),
+        }
+    }
+    pub fn as_body_dto(&self) -> dto::games::GameListBody {
+        dto::games::GameListBody {
+            md5: if self.md5.is_empty() {
+                None
+            } else {
+                Some(self.md5.clone())
+            },
+            sha1: if self.sha1.is_empty() {
+                None
+            } else {
+                Some(self.sha1.clone())
+            },
+            sha256: if self.sha256.is_empty() {
+                None
+            } else {
+                Some(self.sha256.clone())
+            },
         }
     }
 }
@@ -331,14 +363,40 @@ impl GameCreateOpts {
 
 #[derive(Debug, Parser)]
 pub struct GameAddArtifactOpts {
-    /// The game's slug or numerical id.
-    game: IdOrSlug<'static>,
+    /// The game's numerical id.
+    game: u32,
 
-    /// The release's slug or numerical id.
-    release: String,
+    /// The content-type of this file.
+    #[clap(long)]
+    content_type: String,
 
-    /// The artifact's path.
-    path: PathBuf,
+    /// Size of the file.
+    #[clap(long)]
+    size: i32,
+
+    /// MD5 checksum of the file, in hexadecimal.
+    #[clap(long)]
+    md5: Option<dto::encodings::HexString>,
+
+    /// SHA1 checksum of the file, in hexadecimal.
+    #[clap(long)]
+    sha1: Option<dto::encodings::HexString>,
+
+    /// SHA256 checksum of the file, in hexadecimal.
+    #[clap(long)]
+    sha256: Option<dto::encodings::HexString>,
+}
+
+impl GameAddArtifactOpts {
+    pub fn as_dto(&self) -> dto::games::GameAddArtifactRequest<'_> {
+        dto::games::GameAddArtifactRequest {
+            mime_type: &self.content_type,
+            size: self.size,
+            md5: self.md5.clone(),
+            sha1: self.sha1.clone(),
+            sha256: self.sha256.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -945,11 +1003,20 @@ async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
 
 async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
     match &game_opts.command {
-        GamesCommand::List(list_opts) => {
-            output_json(client(opts).games(&list_opts.as_dto()).await?, opts)
-        }
+        GamesCommand::List(list_opts) => output_json(
+            client(opts)
+                .games(&list_opts.as_dto(), &list_opts.as_body_dto())
+                .await?,
+            opts,
+        ),
         GamesCommand::Create(create_opts) => output_json(
             client(opts).games_create(&create_opts.as_dto()).await?,
+            opts,
+        ),
+        GamesCommand::AddArtifact(artifact_opts) => output_json(
+            client(opts)
+                .games_add_artifact(artifact_opts.game, &vec![artifact_opts.as_dto()])
+                .await?,
             opts,
         ),
     }

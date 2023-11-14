@@ -1,7 +1,5 @@
-use crate::db::Db;
 use crate::models;
 use crate::models::{Core, Team, User, UserTeamRole};
-use retronomicon_dto::types::IdOrSlug;
 
 pub fn can_create_team(_user: &models::User) -> bool {
     true
@@ -47,11 +45,4 @@ pub(crate) async fn can_create_core_releases(
 ) -> bool {
     // All members can do releases.
     role >= &UserTeamRole::Member
-}
-
-pub(crate) async fn can_create_games(db: &mut Db, user_id: i32) -> bool {
-    User::get_user_team_and_role(db, user_id.into(), IdOrSlug::root_team())
-        .await
-        .unwrap_or(None)
-        .is_some()
 }

@@ -226,15 +226,15 @@ pub async fn cores_releases_artifacts_list(
                     .to_string()
                 });
 
+                let r#ref = artifact.clone().into();
+
                 dto::artifact::CoreReleaseArtifactListItem {
                     id: artifact.id,
                     filename: artifact.filename,
+                    download_url,
                     mime_type: artifact.mime_type,
                     created_at: artifact.created_at.timestamp(),
-                    md5: hex::encode(artifact.md5),
-                    sha256: hex::encode(artifact.sha256),
-                    size: artifact.size,
-                    download_url: Some(download_url),
+                    r#ref,
                 }
             })
             .collect(),

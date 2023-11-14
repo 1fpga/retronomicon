@@ -43,11 +43,10 @@ macro_rules! declare_client {
                     $url: literal $(,)?
                     $( $path_name: ident: $path_type: ty ),*
                     $(,)?
-                )
-                $(, @query $query_name: ident: $query_type: ty )*
-                $(, @body $body_name: ident: $body_type: ty )*
-                $(, @file $file_name: ident )*
-                $(,)?
+                ),
+                $(@query $query_name: ident: $query_type: ty, )*
+                $(@body $body_name: ident: $body_type: ty, )*
+                $(@file $file_name: ident $(,)? )*
             ) -> $rtype: ty;
         )*
     ) => {
@@ -55,9 +54,9 @@ macro_rules! declare_client {
         pub async fn $fname(
             &self,
             $( $path_name: $path_type, )*
-            $( $query_name: $query_type ),*
-            $( $body_name: $body_type ),*
-            $( $file_name: &std::path::Path ),*
+            $( $query_name: $query_type, )*
+            $( $body_name: $body_type, )*
+            $( $file_name: &std::path::Path, )*
         ) -> Result<$rtype, super::Error> {
             let request = self.1
                 . $method (self.url( &format!($url) ))
@@ -198,6 +197,7 @@ pub mod v1 {
             get games(
                 ("games"),
                 @query paging: &crate::games::GameListQueryParams<'_>,
+                @body filter: &crate::games::GameListBody,
             ) -> Vec<crate::games::GameListItemResponse>;
             get games_details(
                 ("games/{id}", id: u32),
@@ -209,6 +209,10 @@ pub mod v1 {
             put games_update(
                 ("games/{id}", id: u32),
                 @body body: &crate::games::GameUpdateRequest<'_>,
+            ) -> crate::Ok;
+            post games_add_artifact(
+                ("games/{id}/artifacts", id: u32),
+                @body body: &Vec<crate::games::GameAddArtifactRequest<'_>>,
             ) -> crate::Ok;
         }
     }

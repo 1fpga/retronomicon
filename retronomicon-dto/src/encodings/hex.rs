@@ -1,8 +1,10 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::ops::{Deref, DerefMut};
+use std::str::FromStr;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[repr(transparent)]
 pub struct HexString(Vec<u8>);
 
 #[cfg(feature = "openapi")]
@@ -14,6 +16,14 @@ impl schemars::JsonSchema for HexString {
 
     fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
         schemars::schema::Schema::Object(schemars::schema_for_value!("01020304").schema)
+    }
+}
+
+impl FromStr for HexString {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(hex::decode(s)?))
     }
 }
 
@@ -78,5 +88,9 @@ impl DerefMut for HexString {
 impl HexString {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
+    }
+
+    pub fn to_string(&self) -> String {
+        hex::encode(&self.0)
     }
 }

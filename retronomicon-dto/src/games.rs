@@ -1,3 +1,4 @@
+use crate::artifact::ArtifactRef;
 use crate::encodings::HexString;
 use crate::params::{PagingParams, RangeParams};
 use crate::systems::SystemRef;
@@ -13,9 +14,11 @@ use std::collections::BTreeMap;
 pub struct GameListQueryParams<'v> {
     /// Filter games by system. By default, include all systems.
     #[serde(borrow)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<IdOrSlug<'v>>,
 
     /// Filter by year.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub year: Option<RangeParams<i32>>,
 
     /// Paging parameters.
@@ -23,7 +26,26 @@ pub struct GameListQueryParams<'v> {
     pub paging: PagingParams,
 
     /// Filter by name, exact substring.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+}
+
+/// Parameters for filtering the list of games using checksums.
+#[derive(Default, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct GameListBody {
+    /// Filter by md5 checksum.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub md5: Option<Vec<HexString>>,
+
+    /// Filter by sha1 checksum.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<Vec<HexString>>,
+
+    /// Filter by sha256 checksum.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<Vec<HexString>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +69,9 @@ pub struct GameListItemResponse {
     /// The identifier for the game, in this system. This is unique
     /// for all games in this system.
     pub system_unique_id: i32,
+
+    /// The checksums and sizes of all artifacts the game.
+    pub artifacts: Vec<ArtifactRef>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,9 +129,6 @@ pub struct GameUpdateRequest<'a> {
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GameAddArtifactRequest<'a> {
-    /// The filename of the artifact.
-    pub filename: &'a str,
-
     /// Its content type.
     pub mime_type: &'a str,
 
