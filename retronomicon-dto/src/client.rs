@@ -1,5 +1,6 @@
 use reqwest::StatusCode;
 use thiserror::Error;
+use url::Url;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -17,9 +18,28 @@ pub enum Error {
     Io(#[from] std::io::Error),
 }
 
-#[derive(Debug, Clone)]
+pub const DEFAULT_SERVER_URL: &str = "https://retronomicon.land/";
+
+#[derive(Default, Debug, Clone)]
 pub struct ClientConfig<'a> {
+    pub url_base: Option<Url>,
     pub token: Option<&'a str>,
+}
+
+impl<'a> ClientConfig<'a> {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_url(mut self, url: impl AsRef<str>) -> Result<Self, Error> {
+        self.url_base = Some(Url::parse(url.as_ref())?);
+        Ok(self)
+    }
+
+    pub fn with_token(mut self, token: &'a str) -> Self {
+        self.token = Some(token);
+        self
+    }
 }
 
 macro_rules! declare_client {
@@ -119,9 +139,9 @@ pub mod v1 {
             self.0.join(BASE).unwrap().join(path).unwrap()
         }
 
-        fn client(config: ClientConfig) -> Result<Client, reqwest::Error> {
+        fn client(auth_token: Option<&str>) -> Result<Client, reqwest::Error> {
             let mut headers = header::HeaderMap::new();
-            if let Some(token) = config.token {
+            if let Some(token) = auth_token {
                 let mut auth_value =
                     header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
                 auth_value.set_sensitive(true);
@@ -133,11 +153,9 @@ pub mod v1 {
             client.build()
         }
 
-        pub fn new(url_base: impl AsRef<str>, config: ClientConfig) -> Result<Self, String> {
-            Ok(Self(
-                Url::parse(url_base.as_ref()).map_err(|e| e.to_string())?,
-                Self::client(config).map_err(|e| e.to_string())?,
-            ))
+        pub fn new(ClientConfig { url_base, token }: ClientConfig) -> Result<Self, String> {
+            let url = url_base.unwrap_or_else(|| Url::parse(super::DEFAULT_SERVER_URL).unwrap());
+            Ok(Self(url, Self::client(token).map_err(|e| e.to_string())?))
         }
 
         declare_client! {

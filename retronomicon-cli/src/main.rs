@@ -665,13 +665,11 @@ fn metadata_dictionary_from_arg(
 }
 
 fn client(opts: &Opts) -> dto::client::V1Client {
-    dto::client::V1Client::new(
-        opts.server.clone(),
-        ClientConfig {
-            token: opts.token.as_deref(),
-        },
-    )
-    .unwrap()
+    let mut config = ClientConfig::default().with_url(&opts.server).unwrap();
+    if let Some(token) = &opts.token {
+        config = config.with_token(token);
+    }
+    dto::client::V1Client::new(config).unwrap()
 }
 
 async fn send<Q, R>(
