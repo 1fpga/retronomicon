@@ -57,7 +57,7 @@ pub async fn cores_list(
                 slug: core.slug,
                 name: core.name,
                 owner_team: team.into(),
-                latest_release: core_release.into_ref(platform),
+                latest_release: core_release.map(|cr| cr.into_ref(platform)),
             },
         )
         .collect(),

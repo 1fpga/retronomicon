@@ -94,8 +94,6 @@ pub async fn github_callback(
         .await
         .context("failed to deserialize response")?;
 
-    eprintln!("github: {:#?}", json);
-
     // Use the token to retrieve the user's GitHub account information.
     let user_info: GitHubUserInfo = serde_json::from_str(&json.to_string()).unwrap();
 
@@ -138,7 +136,6 @@ pub async fn google_callback(
         .json()
         .await
         .context("failed to deserialize response")?;
-    eprintln!("github: {:#?}", json);
 
     // Use the token to retrieve the user's Google account information.
     let user_info: GoogleUserInfo = serde_json::from_str(&json.to_string()).unwrap();

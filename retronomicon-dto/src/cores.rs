@@ -54,7 +54,7 @@ pub struct CoreListItem {
     pub slug: String,
     pub name: String,
     pub owner_team: TeamRef,
-    pub latest_release: CoreReleaseRef,
+    pub latest_release: Option<CoreReleaseRef>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

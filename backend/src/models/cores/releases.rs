@@ -12,7 +12,7 @@ use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
-#[derive(Queryable, Debug, Identifiable)]
+#[derive(Queryable, Debug, Identifiable, Selectable)]
 #[diesel(table_name = schema::core_releases)]
 pub struct CoreRelease {
     pub id: i32,

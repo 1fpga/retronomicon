@@ -1,14 +1,14 @@
 use crate::db::Db;
+use crate::models::{Platform, System, Team};
 use crate::types::FromIdOrSlug;
 use crate::{models, schema};
 use diesel::prelude::*;
-use diesel::{Identifiable, Queryable};
+use diesel::{AsExpression, FromSqlRow, Identifiable, Queryable};
 use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
 mod releases;
-use crate::models::{Platform, System, Team};
 pub use releases::*;
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -84,12 +84,17 @@ impl Core {
         team: Option<&Team>,
         release_date_ge: Option<chrono::NaiveDateTime>,
     ) -> Result<
-        Vec<(Self, models::Team, models::CoreRelease, models::Platform)>,
+        Vec<(
+            Self,
+            models::Team,
+            Option<models::CoreRelease>,
+            models::Platform,
+        )>,
         diesel::result::Error,
     > {
         let mut query = schema::cores::table
             .inner_join(schema::teams::table)
-            .inner_join(schema::core_releases::table)
+            .left_join(schema::core_releases::table)
             .inner_join(
                 schema::platforms::table
                     .on(schema::platforms::id.eq(schema::core_releases::platform_id)),
@@ -117,12 +122,17 @@ impl Core {
             .select((
                 schema::cores::all_columns,
                 schema::teams::all_columns,
-                schema::core_releases::all_columns,
+                Option::<models::CoreRelease>::as_select(),
                 schema::platforms::all_columns,
             ))
             .offset(page * limit)
             .limit(limit)
-            .load::<(Self, models::Team, models::CoreRelease, models::Platform)>(db)
+            .load::<(
+                Self,
+                models::Team,
+                Option<models::CoreRelease>,
+                models::Platform,
+            )>(db)
             .await
     }
 
