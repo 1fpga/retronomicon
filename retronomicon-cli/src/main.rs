@@ -249,6 +249,7 @@ pub enum GamesCommand {
     // Get(GameGetOpts),
     // Update(GameUpdateOpts),
     AddArtifact(GameAddArtifactOpts),
+    UpdateFromDat(GameUpdateFromDatOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -264,9 +265,13 @@ pub struct GamesListOpts {
     #[clap(long)]
     year: Option<RangeParams<i32>>,
 
-    /// Filter by name, exact substring.
+    /// Filter by name substring.
     #[clap(long)]
     name: Option<String>,
+
+    /// Filter by exact name.
+    #[clap(long)]
+    exact_name: Option<String>,
 
     /// Filter by md5, exact substring.
     #[clap(long)]
@@ -288,6 +293,7 @@ impl GamesListOpts {
             system: self.system.clone(),
             year: self.year,
             name: self.name.clone(),
+            exact_name: self.exact_name.clone(),
         }
     }
     pub fn as_body_dto(&self) -> dto::games::GameListBody {
@@ -364,7 +370,7 @@ impl GameCreateOpts {
 #[derive(Debug, Parser)]
 pub struct GameAddArtifactOpts {
     /// The game's numerical id.
-    game: u32,
+    game: i32,
 
     /// The content-type of this file.
     #[clap(long)]
@@ -397,6 +403,15 @@ impl GameAddArtifactOpts {
             sha256: self.sha256.clone(),
         }
     }
+}
+
+#[derive(Debug, Parser)]
+pub struct GameUpdateFromDatOpts {
+    /// The path to the DAT file.
+    dat: PathBuf,
+
+    /// The system's slug or numerical id.
+    system: IdOrSlug<'static>,
 }
 
 #[derive(Debug, Parser)]
@@ -1017,6 +1032,77 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
                 .await?,
             opts,
         ),
+        GamesCommand::UpdateFromDat(update_opts) => {
+            let dat = datary::read_file(&update_opts.dat).unwrap();
+            let mut i = i32::MAX;
+            let client = client(opts);
+            for game in dat.games {
+                let game_id = if let Some(g) = client
+                    .games(
+                        &dto::games::GameListQueryParams {
+                            paging: Default::default(),
+                            system: Some(update_opts.system.clone()),
+                            year: None,
+                            name: None,
+                            exact_name: Some(game.name.clone()),
+                        },
+                        &Default::default(),
+                    )
+                    .await?
+                    .first()
+                {
+                    info!(?game, "Updating game");
+                    g.id
+                } else {
+                    info!(?game, "Creating game");
+                    let game = dto::games::GameCreateRequest {
+                        name: &game.name,
+                        description: &game.description,
+                        short_description: "",
+                        year: game
+                            .year
+                            .and_then(|x| x.parse::<i32>().ok())
+                            .unwrap_or_default(),
+                        publisher: "",
+                        developer: "",
+                        links: Default::default(),
+                        system: update_opts.system.clone(),
+                        system_unique_id: (game.id.map(|x| x as i32)).unwrap_or_else(|| {
+                            i -= 1;
+                            i
+                        }),
+                    };
+                    let json = client.games_create(&game).await?;
+                    output_json(&json, opts)?;
+                    json.id
+                };
+
+                for r in game.roms {
+                    // One game at a time.
+                    client
+                        .games_add_artifact(
+                            game_id,
+                            &vec![dto::games::GameAddArtifactRequest {
+                                mime_type: mime_guess2::from_ext(
+                                    PathBuf::from(&r.name)
+                                        .extension()
+                                        .unwrap_or_default()
+                                        .to_str()
+                                        .unwrap(),
+                                )
+                                .first_raw()
+                                .unwrap_or("application/octet-stream"),
+                                size: r.size as i32,
+                                md5: r.md5.map(|x| hex::decode(x).unwrap().into()),
+                                sha1: r.sha1.map(|x| hex::decode(x).unwrap().into()),
+                                sha256: Some(vec![].into()),
+                            }],
+                        )
+                        .await?;
+                }
+            }
+            Ok(())
+        }
     }
 }
 

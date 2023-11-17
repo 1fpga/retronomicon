@@ -42,123 +42,11 @@ impl<'a> ClientConfig<'a> {
     }
 }
 
-macro_rules! declare_client {
-    ( @url $fragment: literal ) => { $fragment };
-    ( @url $fragment: ident ) => { &format!("{}", $fragment) };
-
-    ( @url_args ) => {};
-    ( @url_args $fragment: literal, $( $path_name: tt ),* ) => {
-        declare_client!( @url_args $( $path_name ),* )
-    };
-    ( @url_args ($fragment: ident: $fragment_ty: ty) $( $path_name: tt ),* ) => {
-        $fragment: $fragment_ty,
-        declare_client!( @url_args $( $path_name ),* )
-    };
-
-    (
-        $(
-            $(#[$fattr:meta])*
-            $method: ident $fname: ident(
-                (
-                    $url: literal $(,)?
-                    $( $path_name: ident: $path_type: ty ),*
-                    $(,)?
-                ),
-                $(@query $query_name: ident: $query_type: ty, )*
-                $(@body $body_name: ident: $body_type: ty, )*
-                $(@file $file_name: ident $(,)? )*
-            ) -> $rtype: ty;
-        )*
-    ) => {
-        $(
-        pub async fn $fname(
-            &self,
-            $( $path_name: $path_type, )*
-            $( $query_name: $query_type, )*
-            $( $body_name: $body_type, )*
-            $( $file_name: &std::path::Path, )*
-        ) -> Result<$rtype, super::Error> {
-            let request = self.1
-                . $method (self.url( &format!($url) ))
-                $(.query( $query_name ))*
-                $(.json( $body_name ))*
-            ;
-
-            $(
-                let path = $file_name.to_path_buf();
-                let file_name = path
-                    .file_name()
-                    .map(|filename| filename.to_string_lossy().into_owned());
-                let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-                let mime = mime_guess::from_ext(ext).first_or_octet_stream();
-                let file = std::fs::read(path)?;
-                let field = reqwest::multipart::Part::bytes(file).mime_str(&mime.to_string()).unwrap();
-
-                let field = if let Some(file_name) = file_name {
-                    field.file_name(file_name)
-                } else {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "File name not found",
-                    ).into());
-                };
-
-                let form = reqwest::multipart::Form::new().part(stringify!($file_name), field);
-                let request = request.multipart(form);
-            )*
-
-            let response = request
-                .send()
-                .await?;
-
-            if response.status().is_success() {
-                Ok(response
-                    .json()
-                    .await?)
-            } else {
-                let status = response.status();
-                let body = response.text().await?;
-                Err(crate::client::Error::ServerError(status, body))
-            }
-        }
-        )*
-    };
-}
-
-pub mod v1 {
-    use crate::client::ClientConfig;
-    use reqwest::header;
-    use reqwest::{Client, Url};
-
-    pub const BASE: &str = "/api/v1/";
-
-    pub struct V1Client(Url, Client);
-
-    impl V1Client {
-        fn url(&self, path: &str) -> Url {
-            self.0.join(BASE).unwrap().join(path).unwrap()
-        }
-
-        fn client(auth_token: Option<&str>) -> Result<Client, reqwest::Error> {
-            let mut headers = header::HeaderMap::new();
-            if let Some(token) = auth_token {
-                let mut auth_value =
-                    header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
-                auth_value.set_sensitive(true);
-                headers.insert(header::AUTHORIZATION, auth_value);
-            }
-
-            let client = Client::builder().default_headers(headers);
-
-            client.build()
-        }
-
-        pub fn new(ClientConfig { url_base, token }: ClientConfig) -> Result<Self, String> {
-            let url = url_base.unwrap_or_else(|| Url::parse(super::DEFAULT_SERVER_URL).unwrap());
-            Ok(Self(url, Self::client(token).map_err(|e| e.to_string())?))
-        }
-
+macro_rules! declare_client_impl {
+    ($async_or_blocking: ident) => {
         declare_client! {
+            $async_or_blocking;
+
             get users(
                 ("users"),
                 @query paging: &crate::params::PagingParams,
@@ -218,21 +106,232 @@ pub mod v1 {
                 @body filter: &crate::games::GameListBody,
             ) -> Vec<crate::games::GameListItemResponse>;
             get games_details(
-                ("games/{id}", id: u32),
+                ("games/{id}", id: i32),
             ) -> crate::games::GameDetails;
             post games_create(
                 ("games"),
                 @body body: &crate::games::GameCreateRequest<'_>,
             ) -> crate::games::GameCreateResponse;
             put games_update(
-                ("games/{id}", id: u32),
+                ("games/{id}", id: i32),
                 @body body: &crate::games::GameUpdateRequest<'_>,
             ) -> crate::Ok;
             post games_add_artifact(
-                ("games/{id}/artifacts", id: u32),
+                ("games/{id}/artifacts", id: i32),
                 @body body: &Vec<crate::games::GameAddArtifactRequest<'_>>,
             ) -> crate::Ok;
         }
+    };
+}
+
+macro_rules! declare_client {
+    (
+        async;
+
+        $(
+            $(#[$fattr:meta])*
+            $method: ident $fname: ident(
+                (
+                    $url: literal $(,)?
+                    $( $path_name: ident: $path_type: ty ),*
+                    $(,)?
+                ),
+                $(@query $query_name: ident: $query_type: ty, )*
+                $(@body $body_name: ident: $body_type: ty, )*
+                $(@file $file_name: ident $(,)? )*
+            ) -> $rtype: ty;
+        )*
+    ) => {
+        $(
+            $(#[$fattr:meta])*
+            pub async fn $fname(
+                &self,
+                $( $path_name: $path_type, )*
+                $( $query_name: $query_type, )*
+                $( $body_name: $body_type, )*
+                $( $file_name: &std::path::Path, )*
+            ) -> Result<$rtype, super::Error> {
+                let request = self.1
+                    . $method (self.url( &format!($url) ))
+                    $(.query( $query_name ))*
+                    $(.json( $body_name ))*
+                ;
+
+                $(
+                    let path = $file_name.to_path_buf();
+                    let file_name = path
+                        .file_name()
+                        .map(|filename| filename.to_string_lossy().into_owned());
+                    let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+                    let mime = mime_guess::from_ext(ext).first_or_octet_stream();
+                    let file = std::fs::read(path)?;
+                    let field = reqwest::multipart::Part::bytes(file).mime_str(&mime.to_string()).unwrap();
+
+                    let field = if let Some(file_name) = file_name {
+                        field.file_name(file_name)
+                    } else {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "File name not found",
+                        ).into());
+                    };
+
+                    let form = reqwest::multipart::Form::new().part(stringify!($file_name), field);
+                    let request = request.multipart(form);
+                )*
+
+                let response = request
+                    .send()
+                    .await?;
+
+                if response.status().is_success() {
+                    Ok(response
+                        .json()
+                        .await?)
+                } else {
+                    let status = response.status();
+                    let body = response.text().await?;
+                    Err(crate::client::Error::ServerError(status, body))
+                }
+            }
+        )*
+    };
+
+    (
+        blocking;
+
+        $(
+            $(#[$fattr:meta])*
+            $method: ident $fname: ident(
+                (
+                    $url: literal $(,)?
+                    $( $path_name: ident: $path_type: ty ),*
+                    $(,)?
+                ),
+                $(@query $query_name: ident: $query_type: ty, )*
+                $(@body $body_name: ident: $body_type: ty, )*
+                $(@file $file_name: ident $(,)? )*
+            ) -> $rtype: ty;
+        )*
+    ) => {
+        $(
+            $(#[$fattr:meta])*
+            pub fn $fname(
+                &self,
+                $( $path_name: $path_type, )*
+                $( $query_name: $query_type, )*
+                $( $body_name: $body_type, )*
+                $( $file_name: &std::path::Path, )*
+            ) -> Result<$rtype, super::Error> {
+                let request = self.1
+                    . $method (self.url( &format!($url) ))
+                    $(.query( $query_name ))*
+                    $(.json( $body_name ))*
+                ;
+
+                $(
+                    let path = $file_name.to_path_buf();
+                    let file_name = path
+                        .file_name()
+                        .map(|filename| filename.to_string_lossy().into_owned());
+                    let ext = path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+                    let mime = mime_guess::from_ext(ext).first_or_octet_stream();
+                    let file = std::fs::read(path)?;
+                    let field = reqwest::blocking::multipart::Part::bytes(file).mime_str(&mime.to_string()).unwrap();
+
+                    let field = if let Some(file_name) = file_name {
+                        field.file_name(file_name)
+                    } else {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            "File name not found",
+                        ).into());
+                    };
+
+                    let form = reqwest::blocking::multipart::Form::new().part(stringify!($file_name), field);
+                    let request = request.multipart(form);
+                )*
+
+                let response = request
+                    .send()?;
+
+                if response.status().is_success() {
+                    Ok(response.json()?)
+                } else {
+                    let status = response.status();
+                    let body = response.text()?;
+                    Err(crate::client::Error::ServerError(status, body))
+                }
+            }
+        )*
+    };
+}
+
+pub mod v1 {
+    use crate::client::ClientConfig;
+    use reqwest::header;
+    use reqwest::{Client, Url};
+
+    pub const BASE: &str = "/api/v1/";
+
+    pub struct V1Client(Url, Client);
+
+    #[cfg(feature = "blocking")]
+    pub struct BlockingV1Client(Url, reqwest::blocking::Client);
+
+    impl V1Client {
+        fn url(&self, path: &str) -> Url {
+            self.0.join(BASE).unwrap().join(path).unwrap()
+        }
+
+        fn client(auth_token: Option<&str>) -> Result<reqwest::Client, reqwest::Error> {
+            let mut headers = header::HeaderMap::new();
+            if let Some(token) = auth_token {
+                let mut auth_value =
+                    header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
+                auth_value.set_sensitive(true);
+                headers.insert(header::AUTHORIZATION, auth_value);
+            }
+
+            let client = Client::builder().default_headers(headers);
+
+            client.build()
+        }
+
+        pub fn new(ClientConfig { url_base, token }: ClientConfig) -> Result<Self, String> {
+            let url = url_base.unwrap_or_else(|| Url::parse(super::DEFAULT_SERVER_URL).unwrap());
+            Ok(Self(url, Self::client(token).map_err(|e| e.to_string())?))
+        }
+
+        declare_client_impl!(async);
+    }
+
+    #[cfg(feature = "blocking")]
+    impl BlockingV1Client {
+        fn url(&self, path: &str) -> Url {
+            self.0.join(BASE).unwrap().join(path).unwrap()
+        }
+
+        fn client(auth_token: Option<&str>) -> Result<reqwest::blocking::Client, reqwest::Error> {
+            let mut headers = header::HeaderMap::new();
+            if let Some(token) = auth_token {
+                let mut auth_value =
+                    header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
+                auth_value.set_sensitive(true);
+                headers.insert(header::AUTHORIZATION, auth_value);
+            }
+
+            let client = reqwest::blocking::Client::builder().default_headers(headers);
+
+            client.build()
+        }
+
+        pub fn new(ClientConfig { url_base, token }: ClientConfig) -> Result<Self, String> {
+            let url = url_base.unwrap_or_else(|| Url::parse(super::DEFAULT_SERVER_URL).unwrap());
+            Ok(Self(url, Self::client(token).map_err(|e| e.to_string())?))
+        }
+
+        declare_client_impl!(blocking);
     }
 }
 

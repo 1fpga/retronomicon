@@ -19,6 +19,8 @@ anyhow = "1.0.75"
 chrono = { version = "0.4.31" }
 clap = { version = "4.3.24", features = [ "derive", "env" ] }
 clap-verbosity-flag = "2.0.1"
+datary = { path = "../datary", version = "0.1.0" }
+hex = "0.4.3"
 mime_guess2 = "2.0.5"
 reqwest = { version = "0.11.20", features = ["stream", "json", ] }
 retronomicon-dto = { path = "../retronomicon-dto", version = "0.2.0", features = ["cli", "client"] }

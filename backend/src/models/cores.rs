@@ -94,7 +94,20 @@ impl Core {
     > {
         let mut query = schema::cores::table
             .inner_join(schema::teams::table)
-            .left_join(schema::core_releases::table)
+            .left_join(
+                schema::core_releases::table.on(schema::core_releases::id.eq(
+                    // Diesel does not support subqueries on joins, so we have to use raw SQL.
+                    // It's okay because it does not actually need inputs.
+                    diesel::dsl::sql(
+                        r#"(
+                        SELECT id FROM core_releases
+                            WHERE cores.id = core_releases.core_id
+                            ORDER BY date_released DESC, id DESC
+                            LIMIT 1
+                        )"#,
+                    ),
+                )),
+            )
             .inner_join(
                 schema::platforms::table
                     .on(schema::platforms::id.eq(schema::core_releases::platform_id)),

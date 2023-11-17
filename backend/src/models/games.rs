@@ -93,6 +93,7 @@ impl Game {
         system: Option<IdOrSlug<'_>>,
         year: (Bound<i32>, Bound<i32>),
         name: Option<&str>,
+        exact_name: Option<&str>,
         md5: Vec<Vec<u8>>,
         sha1: Vec<Vec<u8>>,
         sha256: Vec<Vec<u8>>,
@@ -101,10 +102,11 @@ impl Game {
 
         let mut query = schema::games::table
             .inner_join(schema::systems::table)
-            .left_join(schema::game_artifacts::table)
             .left_join(
-                schema::artifacts::table
-                    .on(schema::artifacts::id.eq(schema::game_artifacts::artifact_id)),
+                schema::game_artifacts::table.inner_join(
+                    schema::artifacts::table
+                        .on(schema::artifacts::id.eq(schema::game_artifacts::artifact_id)),
+                ),
             )
             .into_boxed();
 
@@ -132,6 +134,10 @@ impl Game {
 
         if let Some(name) = name {
             query = query.filter(dsl::name.ilike(format!("%{}%", name)));
+        }
+
+        if let Some(name) = exact_name {
+            query = query.filter(dsl::name.eq(name));
         }
 
         if !md5.is_empty() {

@@ -25,9 +25,15 @@ pub struct GameListQueryParams<'v> {
     #[serde(flatten)]
     pub paging: PagingParams,
 
-    /// Filter by name, exact substring.
+    /// Filter by name, exact substring. If both name and exact_name are specified,
+    /// they will both try to match and may give no result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+
+    /// Filter by name, exact. If both name and exact_name are specified,
+    /// they will both try to match and may give no result.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exact_name: Option<String>,
 }
 
 /// Parameters for filtering the list of games using checksums.

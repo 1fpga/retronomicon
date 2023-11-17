@@ -8,7 +8,7 @@ pub const LIMIT_MIN: i64 = 10;
 pub const LIMIT_MAX: i64 = 100;
 
 /// Parameters for paging through a list of items.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "cli", derive(clap::Parser))]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
@@ -26,6 +26,10 @@ pub struct PagingParams {
 }
 
 impl PagingParams {
+    pub fn new(page: Option<i64>, limit: Option<i64>) -> Self {
+        Self { page, limit }
+    }
+
     pub fn validate(&self) -> Result<(i64, i64), String> {
         let page = self.page.unwrap_or(PAGE_DEFAULT);
         let limit = self.limit.unwrap_or(LIMIT_DEFAULT);

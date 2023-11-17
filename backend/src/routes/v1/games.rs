@@ -65,6 +65,7 @@ pub async fn games_list(
 
     let year = filter.year.unwrap_or_default().into();
     let name = filter.name.as_deref();
+    let exact_name = filter.exact_name.as_deref();
 
     let mut result = BTreeMap::new();
     let form = form.into_inner();
@@ -94,6 +95,7 @@ pub async fn games_list(
         filter.system,
         year,
         name,
+        exact_name,
         md5,
         sha1,
         sha256,

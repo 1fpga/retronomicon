@@ -16,7 +16,7 @@ authors = [
 
 [dependencies]
 base64 = "0.21.5"
-clap = { version = "4.4.8", optional = true }
+clap = { version = "4.4.8", features = ["derive"], optional = true }
 hex = "0.4.3"
 mime_guess = { version = "2.0.4", optional = true }
 reqwest = { version = "0.11.22", optional = true, features = ["json", "multipart"] }
