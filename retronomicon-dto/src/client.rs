@@ -1,8 +1,5 @@
-use reqwest::StatusCode;
-use thiserror::Error;
-use url::Url;
-
-#[derive(Debug, Error)]
+#[cfg(feature = "client")]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid url")]
     InvalidUrl(#[from] url::ParseError),
@@ -11,7 +8,7 @@ pub enum Error {
     #[error("http error: {0}")]
     Http(#[from] reqwest::Error),
     #[error("Server error: {0}\n{1}")]
-    ServerError(StatusCode, String),
+    ServerError(reqwest::StatusCode, String),
     #[error("json error")]
     Json(#[from] serde_json::Error),
     #[error("io error")]
@@ -20,19 +17,21 @@ pub enum Error {
 
 pub const DEFAULT_SERVER_URL: &str = "https://retronomicon.land/";
 
+#[cfg(feature = "client")]
 #[derive(Default, Debug, Clone)]
 pub struct ClientConfig<'a> {
-    pub url_base: Option<Url>,
+    pub url_base: Option<url::Url>,
     pub token: Option<&'a str>,
 }
 
+#[cfg(feature = "client")]
 impl<'a> ClientConfig<'a> {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn with_url(mut self, url: impl AsRef<str>) -> Result<Self, Error> {
-        self.url_base = Some(Url::parse(url.as_ref())?);
+        self.url_base = Some(url::Url::parse(url.as_ref())?);
         Ok(self)
     }
 
@@ -126,6 +125,31 @@ macro_rules! declare_client_impl {
 
 macro_rules! declare_client {
     (
+        url;
+
+        $(
+            $(#[$fattr:meta])*
+            $method: ident $fname: ident(
+                (
+                    $url: literal $(,)?
+                    $( $path_name: ident: $path_type: ty ),*
+                    $(,)?
+                ),
+                $(@query $query_name: ident: $query_type: ty, )*
+                $(@body $body_name: ident: $body_type: ty, )*
+                $(@file $file_name: ident $(,)? )*
+            ) -> $rtype: ty;
+        )*
+    ) => {
+        $(
+            $(#[$fattr:meta])*
+            pub fn $fname(url: &Url, $( $path_name: $path_type, )*) -> Url {
+                url.join(BASE).unwrap().join(&format!($url)).unwrap()
+            }
+        )*
+    };
+
+    (
         async;
 
         $(
@@ -152,7 +176,7 @@ macro_rules! declare_client {
                 $( $file_name: &std::path::Path, )*
             ) -> Result<$rtype, super::Error> {
                 let request = self.1
-                    . $method (self.url( &format!($url) ))
+                    . $method (crate::routes::v1:: $fname ( &self.0, $( $path_name, )* ))
                     $(.query( $query_name ))*
                     $(.json( $body_name ))*
                 ;
@@ -224,7 +248,7 @@ macro_rules! declare_client {
                 $( $file_name: &std::path::Path, )*
             ) -> Result<$rtype, super::Error> {
                 let request = self.1
-                    . $method (self.url( &format!($url) ))
+                    . $method (crate::routes::v1:: $fname ( &self.0, $( $path_name, )* ))
                     $(.query( $query_name ))*
                     $(.json( $body_name ))*
                 ;
@@ -267,12 +291,21 @@ macro_rules! declare_client {
     };
 }
 
+pub mod routes {
+    pub mod v1 {
+        use url::Url;
+
+        pub const BASE: &str = "/api/v1/";
+
+        declare_client_impl!(url);
+    }
+}
+
+#[cfg(feature = "client")]
 pub mod v1 {
     use crate::client::ClientConfig;
     use reqwest::header;
     use reqwest::{Client, Url};
-
-    pub const BASE: &str = "/api/v1/";
 
     pub struct V1Client(Url, Client);
 
@@ -280,10 +313,6 @@ pub mod v1 {
     pub struct BlockingV1Client(Url, reqwest::blocking::Client);
 
     impl V1Client {
-        fn url(&self, path: &str) -> Url {
-            self.0.join(BASE).unwrap().join(path).unwrap()
-        }
-
         fn client(auth_token: Option<&str>) -> Result<reqwest::Client, reqwest::Error> {
             let mut headers = header::HeaderMap::new();
             if let Some(token) = auth_token {
@@ -308,10 +337,6 @@ pub mod v1 {
 
     #[cfg(feature = "blocking")]
     impl BlockingV1Client {
-        fn url(&self, path: &str) -> Url {
-            self.0.join(BASE).unwrap().join(path).unwrap()
-        }
-
         fn client(auth_token: Option<&str>) -> Result<reqwest::blocking::Client, reqwest::Error> {
             let mut headers = header::HeaderMap::new();
             if let Some(token) = auth_token {
@@ -335,4 +360,7 @@ pub mod v1 {
     }
 }
 
+#[cfg(feature = "blocking")]
+pub use v1::BlockingV1Client;
+#[cfg(feature = "client")]
 pub use v1::V1Client;

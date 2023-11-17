@@ -12,8 +12,8 @@ pub mod tags;
 pub mod teams;
 pub mod user;
 
-#[cfg(feature = "client")]
 pub mod client;
+pub use client::routes;
 
 /// The expected response of an end point that does not return anything.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
