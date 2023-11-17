@@ -14,6 +14,7 @@ COPY ./retronomicon-dto /app/retronomicon-dto
 COPY ./backend /app/backend
 COPY ./Cargo.toml /app/Cargo.toml
 COPY ./Cargo.lock /app/Cargo.lock
+COPY ./datary /app/datary
 RUN cargo install --path backend
 
 FROM debian:latest as runner
