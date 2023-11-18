@@ -53,6 +53,7 @@ pub struct CoreListItem {
     pub id: i32,
     pub slug: String,
     pub name: String,
+    pub system: SystemRef,
     pub owner_team: TeamRef,
     pub latest_release: Option<CoreReleaseRef>,
 }

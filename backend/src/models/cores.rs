@@ -86,6 +86,7 @@ impl Core {
     ) -> Result<
         Vec<(
             Self,
+            models::System,
             models::Team,
             Option<models::CoreRelease>,
             models::Platform,
@@ -134,6 +135,7 @@ impl Core {
         query
             .select((
                 schema::cores::all_columns,
+                schema::systems::all_columns,
                 schema::teams::all_columns,
                 Option::<models::CoreRelease>::as_select(),
                 schema::platforms::all_columns,
@@ -142,6 +144,7 @@ impl Core {
             .limit(limit)
             .load::<(
                 Self,
+                models::System,
                 models::Team,
                 Option<models::CoreRelease>,
                 models::Platform,

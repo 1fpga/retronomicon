@@ -52,11 +52,12 @@ pub async fn cores_list(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .into_iter()
         .map(
-            |(core, team, core_release, platform)| dto::cores::CoreListItem {
+            |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
                 id: core.id,
                 slug: core.slug,
                 name: core.name,
                 owner_team: team.into(),
+                system: system.into(),
                 latest_release: core_release.map(|cr| cr.into_ref(platform)),
             },
         )
