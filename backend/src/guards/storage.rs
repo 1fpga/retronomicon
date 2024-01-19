@@ -27,7 +27,7 @@ impl<'a> FromRequest<'a> for Storage {
         let config = match request.rocket().state::<StorageConfig>() {
             Some(storage) => storage,
             None => {
-                return Outcome::Failure((
+                return Outcome::Error((
                     rocket::http::Status::InternalServerError,
                     "Storage not configured".to_string(),
                 ))

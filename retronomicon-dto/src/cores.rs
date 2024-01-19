@@ -49,6 +49,13 @@ pub struct CoreRef {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct CoreList {
+    pub items: Vec<CoreListItem>,
+    pub total: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreListItem {
     pub id: i32,
     pub slug: String,
@@ -77,6 +84,7 @@ pub struct CoreCreateResponse {
     pub slug: String,
 }
 
+///
 #[derive(Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreDetailsResponse {

@@ -19,7 +19,11 @@ once_cell = "1.18.0"
 regex = "1.9.5"
 reqwest = { version = "0.11.20", default-features = false, features = ["json", "rustls-tls"] }
 retronomicon-dto = { path = "../retronomicon-dto", features = ["rocket"] }
-rocket_oauth2 = { version = "0.5.0-rc.2", features = ["hyper_rustls_adapter"] }
+rocket = { version = "0.5.0", features = ["json", "secrets", "tls"] }
+rocket_db_pools = { version = "0.1.0", features = ["diesel_postgres"] }
+rocket_oauth2 = { version = "0.5.0", features = ["hyper_rustls_adapter"] }
+rocket_okapi = { version = "0.8.0", features = ["swagger", "rapidoc", "secrets"] }
+rocket_prometheus = "0.10.0"
 rocket-multipart-form-data = "0.10.6"
 rust-s3 = "0.34.0-rc4"
 scoped-futures = "0.1.3"
@@ -34,24 +38,3 @@ rustls-pemfile = "2.0.0-alpha.1"
 rustls-native-certs = "0.6.2"
 tokio-postgres = "0.7.10"
 tokio-postgres-rustls = "0.10.0"
-
-[dependencies.rocket]
-version = "=0.5.0-rc.3"
-features = ["json", "secrets", "tls"]
-
-[dependencies.rocket_db_pools]
-git = "https://github.com/SergioBenitez/Rocket"
-rev = "26a3f00f"
-version = "=0.1.0-rc.3"
-features = ["diesel_postgres"]
-
-[dependencies.rocket_okapi]
-git = "https://github.com/hansl/okapi.git"
-rev = "42aef7e"
-version = "0.8.0-rc.3"
-features = ["swagger", "rapidoc", "secrets"]
-
-[dependencies.rocket_prometheus]
-git = "https://github.com/hansl/rocket_prometheus.git"
-rev = "fbf7ffa9c9c9c2137ceb050f9d8109d98c8e8c96"
-version = "0.10.0-rc.3"
