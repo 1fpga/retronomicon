@@ -5,6 +5,7 @@ import axios from 'axios';
 function App() {
   const [username, setUsername] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState<string>("");
+  const [teams, setTeams] = React.useState<string[]>([]); // ["team1", "team2"]
 
   const [token, setToken] = React.useState<string | null>(null);
 
@@ -15,6 +16,7 @@ function App() {
         .then((user) => {
             setUsername(user?.username);
             setDescription(user?.description || "");
+            setTeams(user?.teams.map((t: any) => t.name) || []);
         })
   }
   if (username == null) {
@@ -52,6 +54,8 @@ function App() {
         <button onClick={() => axios.post(process.env.REACT_APP_BACKEND_URL + "/logout").then(() => getUser())}>Logout</button>
         <p>
           Username: {username === "" ? "Not yet set" : JSON.stringify(username)}
+          <br/>
+          Teams: {teams.join(", ")}
         </p>
 
         <hr style={{"width": "100%"}}/>
