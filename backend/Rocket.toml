@@ -4,8 +4,6 @@ base_url = "/"
 
 # Members (emails) of the root team.
 root_team = [
-    "hans@larsen.online",
-    "hans@retronomicon.dev",
 ]
 root_team_id = 1
 
