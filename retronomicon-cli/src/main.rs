@@ -30,7 +30,7 @@ struct Opts {
     #[cfg_attr(debug_assertions, clap(default_value = "http://localhost:8000/"))]
     #[cfg_attr(
         not(debug_assertions),
-        clap(default_value = "https://retronomicon.com/")
+        clap(default_value = "https://retronomicon.land/")
     )]
     pub server: Url,
 

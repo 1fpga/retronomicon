@@ -49,7 +49,7 @@ function App() {
           <a href={process.env.REACT_APP_BACKEND_URL + "/login/github"}>Login using Github</a><br/>
           <a href={process.env.REACT_APP_BACKEND_URL + "/login/patreon"}>Login using Patreon</a>
         </p>
-        <button onClick={() => axios.get(process.env.REACT_APP_BACKEND_URL + "/logout").then(() => getUser())}>Logout</button>
+        <button onClick={() => axios.post(process.env.REACT_APP_BACKEND_URL + "/logout").then(() => getUser())}>Logout</button>
         <p>
           Username: {username === "" ? "Not yet set" : JSON.stringify(username)}
         </p>

@@ -21,7 +21,21 @@ async fn login_(
     email: &str,
     auth_provider: &str,
 ) -> Result<Redirect, Debug<Error>> {
-    let add_to_root = config.root_team.iter().any(|u| u == email);
+    let mut add_to_root = false;
+
+    if config.root_team.iter().any(|u| u == email) {
+        add_to_root = true;
+    }
+
+    // In DEBUG mode, we want to also check the local env variable for root user.
+    #[cfg(debug_assertions)]
+    {
+        if let Ok(env_email) = std::env::var("ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL") {
+            if env_email == email {
+                add_to_root = true;
+            }
+        }
+    }
 
     db.transaction::<Redirect, diesel::result::Error, _>(|db| {
         async move {
