@@ -86,7 +86,7 @@ pub async fn github_callback(
         .get("https://api.github.com/user")
         .header(AUTHORIZATION, format!("token {}", token.access_token()))
         .header(ACCEPT, "application/vnd.github.v3+json")
-        .header(USER_AGENT, "rocket_oauth2 demo application")
+        .header(USER_AGENT, "retronomicon-backend")
         .send()
         .await
         .context("failed to complete request")?

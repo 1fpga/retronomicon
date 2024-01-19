@@ -39,7 +39,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
             .first::<models::UserTeam>(&mut db)
             .await
             .map_err(|e| e.to_string())
-            .into_outcome(Status::Unauthorized)
+            .or_error(Status::Unauthorized)
             .map(|_| RootUserGuard { id: user.id })
     }
 }
@@ -127,9 +127,7 @@ pub struct UserGuard {
 impl<'r> request::FromRequest<'r> for UserGuard {
     type Error = String;
 
-    async fn from_request(
-        request: &'r request::Request<'_>,
-    ) -> request::Outcome<UserGuard, Self::Error> {
+    async fn from_request(request: &'r Request<'_>) -> request::Outcome<UserGuard, Self::Error> {
         fn validate_exp(user: UserGuard) -> request::Outcome<UserGuard, String> {
             if chrono::Utc::now().timestamp() > user.exp {
                 Outcome::Forward(Status::Unauthorized)
@@ -144,9 +142,11 @@ impl<'r> request::FromRequest<'r> for UserGuard {
             .await
             .expect("request cookies");
         if let Some(cookie) = cookies.get_private("auth") {
-            return serde_json::from_str(cookie.value())
-                .map_err(|e| e.to_string())
-                .into_outcome(Status::Unauthorized)
+            let json: Result<UserGuard, _> =
+                serde_json::from_str(cookie.value()).map_err(|e| e.to_string());
+
+            return json
+                .or_error(Status::Unauthorized)
                 .and_then(validate_exp)
                 .and_then(|user: UserGuard| {
                     user.update_cookie(cookies);
@@ -160,7 +160,7 @@ impl<'r> request::FromRequest<'r> for UserGuard {
             .get_one("Authorization")
             .ok_or("Unauthorized".to_string())
             .and_then(|key| UserGuard::decode_jwt(key).map_err(|e| e.to_string()))
-            .into_outcome(Status::Unauthorized)
+            .or_error(Status::Unauthorized)
             .and_then(validate_exp)
     }
 }
@@ -173,9 +173,9 @@ impl From<UserGuard> for Option<AuthenticatedUserGuard> {
 
 impl<'a> From<&UserGuard> for Cookie<'a> {
     fn from(user: &UserGuard) -> Self {
-        Cookie::build("auth", serde_json::to_string(user).unwrap())
+        Cookie::build(("auth", serde_json::to_string(user).unwrap()))
             .same_site(rocket::http::SameSite::Lax)
-            .finish()
+            .build()
     }
 }
 
@@ -365,7 +365,7 @@ impl UserGuard {
 
     pub fn update_cookie(&self, cookies: &CookieJar<'_>) {
         // Set a private cookie with the user's name, and redirect to the home page.
-        cookies.add_private(self.into());
+        cookies.add_private(self);
     }
 
     pub fn decode_jwt(token: &str) -> Result<Self, jsonwebtoken::errors::Error> {
@@ -394,7 +394,7 @@ impl UserGuard {
     }
 
     pub fn remove_cookie(&self, cookies: &CookieJar) {
-        cookies.remove_private(Cookie::named("auth"));
+        cookies.remove_private("auth");
     }
 }
 

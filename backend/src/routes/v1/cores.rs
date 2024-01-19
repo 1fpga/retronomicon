@@ -11,6 +11,7 @@ use serde_json::json;
 
 pub mod releases;
 
+/// List cores.
 #[openapi(tag = "Cores", ignore = "db")]
 #[get("/cores?<filter..>")]
 pub async fn cores_list(
