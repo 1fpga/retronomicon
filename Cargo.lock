@@ -266,6 +266,7 @@ dependencies = [
  "tokio-postgres-rustls",
  "tracing",
  "uuid",
+ "wildmatch",
 ]
 
 [[package]]
@@ -3561,6 +3562,12 @@ dependencies = [
  "wasm-bindgen",
  "web-sys",
 ]
+
+[[package]]
+name = "wildmatch"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "495ec47bf3c1345005f40724f0269362c8556cbc43aed0526ed44cae1d35fceb"
 
 [[package]]
 name = "winapi"
