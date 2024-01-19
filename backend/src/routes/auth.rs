@@ -12,6 +12,7 @@ use rocket_oauth2::TokenResponse;
 use scoped_futures::ScopedFutureExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use wildmatch::WildMatch;
 
 async fn login_(
     mut db: Db,
@@ -23,17 +24,17 @@ async fn login_(
 ) -> Result<Redirect, Debug<Error>> {
     let mut add_to_root = false;
 
-    if config.root_team.iter().any(|u| u == email) {
+    if config
+        .root_team
+        .iter()
+        .any(|e| WildMatch::new(e).matches(email))
+    {
         add_to_root = true;
     }
 
-    // In DEBUG mode, we want to also check the local env variable for root user.
-    #[cfg(debug_assertions)]
-    {
-        if let Ok(env_email) = std::env::var("ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL") {
-            if env_email == email {
-                add_to_root = true;
-            }
+    if let Ok(env_email) = std::env::var("ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL") {
+        if env_email == email {
+            add_to_root = true;
         }
     }
 

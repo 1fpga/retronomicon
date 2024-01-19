@@ -1,32 +1,39 @@
-import React, {FormEvent, useEffect} from 'react';
+import React, {FormEvent, useCallback, useEffect} from 'react';
 import './App.css';
 import axios from 'axios';
 
 function App() {
   const [username, setUsername] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState<string>("");
-  const [teams, setTeams] = React.useState<string[]>([]); // ["team1", "team2"]
+  const [teams, setTeams] = React.useState<string[]>([]);
 
   const [token, setToken] = React.useState<string | null>(null);
 
-  async function getUser() {
-    return axios.get(process.env.REACT_APP_BACKEND_URL + "/me")
-        .then((res) => res.data)
-        .catch(() => null)
-        .then((user) => {
-            setUsername(user?.username);
-            setDescription(user?.description || "");
-            setTeams(user?.teams.map((t: any) => t.name) || []);
-        })
-  }
-  if (username == null) {
-    getUser();
-  }
+  let getUser = useCallback(async () => {
+    try {
+      let user = (await axios.get(process.env.REACT_APP_BACKEND_URL + "/me"))?.data;
+
+      setUsername(user?.username);
+      setDescription(user?.description || "");
+      setTeams(user?.teams.map((t: any) => t.name) || []);
+    } catch (e: any) {
+        if (e.response?.status === 401) {
+          setUsername(null);
+          setDescription("");
+          setTeams([]);
+        } else {
+          throw e;
+        }
+    }
+  }, [username]);
 
   useEffect(() => {
-    let id = setInterval(getUser, 10000);
+    let id: NodeJS.Timer;
+    getUser().then(() => {
+      id = setInterval(getUser, 10000);
+    });
     return () => clearInterval(id);
-  });
+  }, [getUser]);
 
   function updateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
