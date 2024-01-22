@@ -74,6 +74,21 @@ entity "**game_artifacts**" {
   --
 }
 
+entity "**game_image_tags**" {
+  + ""game_image_id"": //integer [PK][FK]//
+  + ""tag_id"": //integer [PK][FK]//
+  --
+}
+
+entity "**game_images**" {
+  Images related to games. The image_name field is the name of the image file.
+  ..
+  + ""id"": //serial [PK]//
+  --
+  *""game_id"": //integer [FK]//
+  *""image_name"": //character varying(255) //
+}
+
 entity "**games**" {
   A table of games/roms that can be run (or implemented by) cores.
   ..
@@ -229,6 +244,12 @@ entity "**users**" {
 "**game_artifacts**"   }--  "**artifacts**"
 
 "**game_artifacts**"   }--  "**games**"
+
+"**game_image_tags**"   }--  "**game_images**"
+
+"**game_image_tags**"   }--  "**tags**"
+
+"**game_images**"   }--  "**games**"
 
 "**games**"   }--  "**systems**"
 
