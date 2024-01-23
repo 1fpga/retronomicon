@@ -30,6 +30,8 @@ pub fn routes() -> Vec<rocket::Route> {
         games::games_add_artifact,
         games::games_create,
         games::games_details,
+        games::games_images,
+        games::games_images_upload,
         games::games_list,
         games::games_update,
         me::me,

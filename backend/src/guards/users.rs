@@ -1,4 +1,4 @@
-use crate::JwtKeys;
+use crate::fairings::config::{JwtKeys, RetronomiconConfig};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use retronomicon_db::models::{User, UserTeam};
 use retronomicon_db::Db;
@@ -22,6 +22,11 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
     type Error = String;
 
     async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let config = request
+            .rocket()
+            .state::<State<RetronomiconConfig>>()
+            .expect("No retronomicon config");
+
         let mut db = request
             .guard::<Db>()
             .await
@@ -32,7 +37,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
             Outcome::Error((status, _)) => return Outcome::Error((status, "Unauthorized".into())),
         };
 
-        UserTeam::user_is_in_team(&mut db, user.id, 1)
+        UserTeam::user_is_in_team(&mut db, user.id, config.root_team_id)
             .await
             .map_err(|e| e.to_string())
             .or_error(Status::Unauthorized)

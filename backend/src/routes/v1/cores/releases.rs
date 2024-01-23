@@ -285,7 +285,7 @@ async fn upload_single_artifact(
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
-    models::CoreReleaseArtifact::create(db, &release, &artifact)
+    models::CoreReleaseArtifact::create(db, release, &artifact)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
@@ -352,7 +352,8 @@ pub async fn cores_releases_artifacts_upload(
                 Status::BadRequest,
                 "Content-Type not specified.".to_string(),
             ))?;
-            let file_data = std::fs::read(&file.path).unwrap();
+            let file_data = std::fs::read(&file.path)
+                .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
             // Make sure the filename is unique.
             // TODO: figure out if we can make this check in the database itself.

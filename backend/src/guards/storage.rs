@@ -12,6 +12,8 @@ pub struct StorageConfig {
     pub region: String,
     pub cores_bucket: String,
     pub cores_url_base: String,
+    pub images_bucket: String,
+    pub images_url_base: String,
 }
 
 pub struct Storage {
@@ -59,14 +61,15 @@ impl Storage {
         Ok(bucket)
     }
 
-    pub async fn upload_core(
+    async fn upload(
         &self,
+        bucket_name: &str,
         filename: &str,
         data: &[u8],
         content_type: &str,
-    ) -> Result<String, String> {
+    ) -> Result<(), String> {
         let bucket = self
-            .bucket(&self.config.cores_bucket, true)
+            .bucket(bucket_name, true)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -88,8 +91,31 @@ impl Storage {
                 response.status_code()
             ));
         }
+        Ok(())
+    }
 
+    pub async fn upload_core(
+        &self,
+        filename: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        self.upload(&self.config.cores_bucket, filename, data, content_type)
+            .await?;
         let url = Url::parse(&format!("{}/{}", self.config.cores_url_base, filename)).unwrap();
+
+        Ok(url.to_string())
+    }
+
+    pub async fn upload_image(
+        &self,
+        filename: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        self.upload(&self.config.images_bucket, filename, data, content_type)
+            .await?;
+        let url = Url::parse(&format!("{}/{}", self.config.images_url_base, filename)).unwrap();
 
         Ok(url.to_string())
     }

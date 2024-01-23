@@ -87,6 +87,9 @@ entity "**game_images**" {
   --
   *""game_id"": //integer [FK]//
   *""image_name"": //character varying(255) //
+  *""width"": //integer //
+  *""height"": //integer //
+  *""mime_type"": //character varying(255) //
 }
 
 entity "**games**" {

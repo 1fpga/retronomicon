@@ -95,6 +95,10 @@ diesel::table! {
         game_id -> Int4,
         #[max_length = 255]
         image_name -> Varchar,
+        width -> Int4,
+        height -> Int4,
+        #[max_length = 255]
+        mime_type -> Varchar,
     }
 }
 

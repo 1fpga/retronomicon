@@ -1,103 +1,27 @@
-use crate::guards::emailer::SmtpConfig;
+use crate::config::{database_config, oauth_config};
+use crate::fairings::config::{DbPepper, JwtKeys, RetronomiconConfig};
 use crate::routes::v1;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use jsonwebtoken::{DecodingKey, EncodingKey};
 use retronomicon_db::{run_migrations, RetronomiconDbPool};
 use rocket::figment::providers::Env;
-use rocket::figment::value::{Map, Value};
-use rocket::figment::{map, Provider};
 use rocket::response::status::NoContent;
 use rocket::{get, http::Status, routes};
 use rocket_oauth2::OAuth2;
 use rocket_okapi::rapidoc::{make_rapidoc, GeneralConfig, HideShowConfig, RapiDocConfig};
 use rocket_okapi::settings::UrlObject;
 use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
-use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 
+mod config;
 mod fairings;
 mod guards;
 
 mod routes;
 mod utils;
 
-#[derive(Debug, serde::Deserialize)]
-pub struct RetronomiconConfig {
-    pub base_url: String,
-    pub root_team: Vec<String>,
-    pub root_team_id: i32,
-
-    pub smtp: SmtpConfig,
-}
-
-pub struct JwtKeys {
-    pub encoding: EncodingKey,
-    pub decoding: DecodingKey,
-}
-
-impl JwtKeys {
-    pub fn from_base64(secret: &str) -> Self {
-        let secret = STANDARD.decode(secret).expect("Invalid base64 JWT secret");
-        let encoding = EncodingKey::from_secret(&secret);
-        let decoding = DecodingKey::from_secret(&secret);
-        Self { encoding, decoding }
-    }
-}
-
-pub struct DbPepper(pub Vec<u8>);
-
-impl DbPepper {
-    pub fn from_base64(secret: &str) -> Self {
-        let secret = STANDARD.decode(secret).expect("Invalid base64 pepper");
-        Self(secret)
-    }
-}
-
 #[get("/healthz")]
 async fn health_handler() -> Result<NoContent, Status> {
     Ok(NoContent)
-}
-
-fn database_config() -> impl Provider {
-    let db_url = Some(Value::from(
-        env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
-    ));
-    let pool_size = env::var("DATABASE_POOL_SIZE")
-        .ok()
-        .and_then(|s| s.parse::<u32>().ok())
-        .map(Value::from);
-    let certs_files: Option<Value> = env::var("DATABASE_CERTS")
-        .ok()
-        .map(|e| Value::from(e.split(';').map(|c| Value::from(c)).collect::<Vec<_>>()));
-
-    let db: Map<_, Option<Value>> = map! {
-        "url" => db_url.into(),
-        "pool_size" => pool_size,
-        "certs" => certs_files.into(),
-    };
-
-    ("databases", map!["retronomicon_db" => db])
-}
-
-fn oauth_config() -> impl Provider {
-    let mut oauth = BTreeMap::new();
-    for (k, v) in env::vars() {
-        if k.starts_with("ROCKET_OAUTH_") {
-            let mut parts = k.splitn(4, '_');
-            parts.next();
-            parts.next();
-
-            let provider = parts.next().unwrap();
-            let key = parts.next().unwrap();
-            let value = oauth
-                .entry(provider.to_lowercase())
-                .or_insert_with(BTreeMap::<String, String>::new);
-            value.insert(key.to_lowercase(), v);
-        }
-    }
-
-    ("oauth", oauth)
 }
 
 #[rocket::launch]
@@ -189,6 +113,10 @@ async fn rocket() -> _ {
             cores_bucket: env::var("AWS_CORES_BUCKET").unwrap_or("retronomicon-cores".to_string()),
             cores_url_base: env::var("AWS_CORES_URL_BASE")
                 .unwrap_or("https://cores.retronomicon.land".to_string()),
+            images_bucket: env::var("AWS_IMAGES_BUCKET")
+                .unwrap_or("retronomicon-images".to_string()),
+            images_url_base: env::var("AWS_IMAGES_URL_BASE")
+                .unwrap_or("https://i.retronomicon.land".to_string()),
         })
         .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>())
 }

@@ -1,7 +1,7 @@
+use crate::fairings::config::{DbPepper, RetronomiconConfig};
 use crate::guards::emailer::EmailGuard;
 use crate::guards::users::UserGuard;
 use crate::routes::auth::{GitHubUserInfo, GoogleUserInfo, PatreonUserInfo};
-use crate::{DbPepper, RetronomiconConfig};
 use retronomicon_db::models::{User, UserPassword};
 use retronomicon_db::Db;
 use retronomicon_dto as dto;

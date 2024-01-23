@@ -7,6 +7,7 @@ pub mod artifact;
 pub mod auth;
 pub mod cores;
 pub mod games;
+pub mod images;
 pub mod platforms;
 pub mod systems;
 pub mod tags;

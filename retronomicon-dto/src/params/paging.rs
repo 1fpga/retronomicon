@@ -40,7 +40,7 @@ impl PagingParams {
             Err(format!(
                 "Limit must be greater than or equal to {LIMIT_MIN}"
             ))
-        } else if limit > 100 {
+        } else if limit > LIMIT_MAX {
             Err(format!("Limit must be less than or equal to {LIMIT_MAX}"))
         } else {
             Ok((page, limit))

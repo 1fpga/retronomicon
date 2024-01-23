@@ -45,3 +45,11 @@ pub(crate) async fn can_create_core_releases(
     // All members can do releases.
     role >= &models::UserTeamRole::Member
 }
+
+pub(crate) fn can_upload_image(
+    _user: &models::User,
+    team: &models::Team,
+    _role: &models::UserTeamRole,
+) -> bool {
+    team.is_root()
+}

@@ -1,5 +1,5 @@
+use crate::fairings::config::RetronomiconConfig;
 use crate::guards::users::UserGuard;
-use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
 use retronomicon_db::{models, Db};
 use rocket::http::hyper::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
