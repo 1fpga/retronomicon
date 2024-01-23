@@ -1,5 +1,5 @@
-use crate::db::run_migrations;
 use crate::routes::v1;
+use retronomicon_db::{run_migrations, RetronomiconDbPool};
 use rocket::figment::value::{Map, Value};
 use rocket::figment::{map, Provider};
 use rocket::response::status::NoContent;
@@ -14,12 +14,8 @@ use std::env;
 use std::path::PathBuf;
 use tracing::debug;
 
-mod db;
 mod fairings;
 mod guards;
-mod models;
-mod schema;
-mod types;
 
 mod routes;
 mod utils;
@@ -149,7 +145,7 @@ async fn main() -> Result<(), rocket::Error> {
             "/",
             rocket::fs::FileServer::from(PathBuf::from(static_root)),
         )
-        .attach(db::RetronomiconDb::init())
+        .attach(RetronomiconDbPool::init())
         .attach(prometheus)
         .attach(OAuth2::<routes::auth::GitHubUserInfo>::fairing("github"))
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))

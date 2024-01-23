@@ -1,13 +1,13 @@
-use crate::db::Db;
 use crate::guards::users::AuthenticatedUserGuard;
-use crate::models::UserTeamRole;
 use crate::utils::{acls, json};
-use crate::{models, schema};
+use retronomicon_db::models;
+use retronomicon_db::models::Team;
+use retronomicon_db::types::FetchModel;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{delete, get, post, put};
-use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 use serde_json::{json, Value};
 
@@ -19,13 +19,10 @@ pub async fn teams(
 ) -> Result<Json<Vec<dto::teams::Team>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    schema::teams::table
-        .offset(page * limit)
-        .limit(limit)
-        .load::<models::Team>(&mut db)
+    models::Team::list(&mut db, page, limit)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))
         .map(|t| Json(t.into_iter().map(Into::into).collect()))
+        .map_err(|e| (Status::InternalServerError, e.to_string()))
 }
 
 #[openapi(tag = "Teams", ignore = "db")]
@@ -34,43 +31,11 @@ pub async fn teams_details(
     mut db: Db,
     id: dto::types::IdOrSlug<'_>,
 ) -> Result<Json<dto::teams::TeamDetails>, (Status, String)> {
-    let team = if let Some(id) = id.as_id() {
-        schema::teams::table
-            .filter(schema::teams::id.eq(id))
-            .first::<models::Team>(&mut db)
-            .await
-    } else if let Some(slug) = id.as_slug() {
-        schema::teams::table
-            .filter(schema::teams::slug.eq(slug))
-            .first::<models::Team>(&mut db)
-            .await
-    } else {
-        return Err((Status::BadRequest, "Invalid id or slug".to_string()));
-    }
-    .optional()
-    .map_err(|e| (Status::InternalServerError, e.to_string()))?
-    .ok_or((Status::NotFound, "Team not found".to_string()))?;
-
-    let users = models::UserTeam::belonging_to(&team)
-        .inner_join(schema::users::table.on(schema::users::id.eq(schema::user_teams::user_id)))
-        .select((
-            schema::users::id,
-            schema::users::username,
-            schema::user_teams::role,
-        ))
-        .filter(schema::users::username.is_not_null())
-        .filter(schema::user_teams::invite_from.is_null())
-        .load::<(i32, Option<String>, models::UserTeamRole)>(&mut db)
+    let team = Team::from_id_or_slug(&mut db, id).await?;
+    let users = team
+        .users_ref(&mut db)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .into_iter()
-        .filter_map(|(id, username, role)| {
-            username.map(|username| dto::teams::TeamUserRef {
-                user: dto::user::UserRef { id, username },
-                role: role.into(),
-            })
-        })
-        .collect();
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
     let links =
         json::links_into_btree_map(team.links).map_err(|e| (Status::InternalServerError, e))?;
@@ -131,7 +96,7 @@ pub async fn teams_create(
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
-    user.join_team(db, team.id, UserTeamRole::Owner)
+    user.join_team(db, team.id, models::UserTeamRole::Owner)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
@@ -239,7 +204,7 @@ pub async fn invite(
     let user = models::User::from_userid(db, user)
         .await
         .map_err(|e| (Status::NotFound, e.to_string()))?;
-    let role = UserTeamRole::from(role);
+    let role = models::UserTeamRole::from(role);
 
     if !acls::can_invite_to_team(&team, &admin_user, &admin_role, &user, &role) {
         return Err((Status::Unauthorized, "Insufficient permissions".to_string()));

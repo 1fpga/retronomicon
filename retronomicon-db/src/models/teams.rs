@@ -1,15 +1,17 @@
-use crate::db::Db;
-use crate::schema;
+use crate::models::User;
 use crate::types::FromIdOrSlug;
+use crate::Db;
+use crate::{models, schema};
 use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
+use diesel::internal::operators_macro::FieldAliasMapper;
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use diesel::result::Error;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
 use retronomicon_dto as dto;
 use retronomicon_dto::types::IdOrSlug;
+use rocket::http::Status;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
@@ -137,5 +139,42 @@ impl Team {
             .execute(db)
             .await
             .map(|_| ())
+    }
+
+    pub async fn list(
+        db: &mut Db,
+        page: i64,
+        limit: i64,
+    ) -> Result<Vec<Self>, diesel::result::Error> {
+        schema::teams::table
+            .offset(page * limit)
+            .limit(limit)
+            .load::<Self>(db)
+            .await
+    }
+
+    pub async fn users_ref(
+        &self,
+        db: &mut Db,
+    ) -> Result<Vec<dto::teams::TeamUserRef>, diesel::result::Error> {
+        Ok(models::UserTeam::belonging_to(self)
+            .inner_join(schema::users::table.on(schema::users::id.eq(schema::user_teams::user_id)))
+            .select((
+                schema::users::id,
+                schema::users::username,
+                schema::user_teams::role,
+            ))
+            .filter(schema::users::username.is_not_null())
+            .filter(schema::user_teams::invite_from.is_null())
+            .load::<(i32, Option<String>, models::UserTeamRole)>(db)
+            .await?
+            .into_iter()
+            .filter_map(|(id, username, role)| {
+                username.map(|username| dto::teams::TeamUserRef {
+                    user: dto::user::UserRef { id, username },
+                    role: role.into(),
+                })
+            })
+            .collect())
     }
 }

@@ -1,5 +1,4 @@
-use crate::models;
-use crate::models::{Core, Team, User, UserTeamRole};
+use retronomicon_db::models;
 
 pub fn can_create_team(_user: &models::User) -> bool {
     true
@@ -38,11 +37,11 @@ pub fn can_invite_to_team(
 }
 
 pub(crate) async fn can_create_core_releases(
-    _user: &User,
-    _team: &Team,
-    role: &UserTeamRole,
-    _core: &Core,
+    _user: &models::User,
+    _team: &models::Team,
+    role: &models::UserTeamRole,
+    _core: &models::Core,
 ) -> bool {
     // All members can do releases.
-    role >= &UserTeamRole::Member
+    role >= &models::UserTeamRole::Member
 }

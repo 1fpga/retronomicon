@@ -1,10 +1,10 @@
-use crate::db::Db;
-use crate::{guards, models, schema};
+use crate::guards;
+use retronomicon_db::models::User;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{get, post, put};
-use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 
 /// Check availability of a username. This is easier and less resource intensive than
@@ -15,14 +15,11 @@ pub async fn check_username(
     mut db: Db,
     username: &str,
 ) -> Result<Json<dto::user::UserCheckResponse>, (Status, String)> {
-    // Validate the username.
-    dto::user::Username::new(username).map_err(|e| (Status::BadRequest, e.to_string()))?;
-
-    let exists = schema::users::table
-        .filter(schema::users::username.eq(username))
-        .first::<models::User>(&mut db)
+    let user_id =
+        dto::user::Username::new(username).map_err(|e| (Status::BadRequest, e.to_string()))?;
+    let exists = User::exists(&mut db, user_id.into())
         .await
-        .is_ok();
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
     // Negate the existence because we want to return `true` if the username is available.
     Ok(Json(dto::user::UserCheckResponse {
@@ -40,7 +37,7 @@ pub async fn users(
 ) -> Result<Json<Vec<dto::user::User>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    models::User::list(&mut db, page, limit)
+    User::list(&mut db, page, limit)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))
         .map(|u| Json(u.into_iter().map(Into::into).collect()))
@@ -52,7 +49,7 @@ pub async fn users_details(
     mut db: Db,
     id: dto::user::UserIdOrUsername<'_>,
 ) -> Result<Json<dto::user::UserDetails>, (Status, String)> {
-    let (user, teams) = models::User::get_user_with_teams(&mut db, id)
+    let (user, teams) = User::get_user_with_teams(&mut db, id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::NotFound, "User not found".to_string()))?;
@@ -90,7 +87,7 @@ pub async fn users_update(
     id: dto::user::UserIdOrUsername<'_>,
     form: Json<dto::user::UserUpdate<'_>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
-    let user = models::User::from_userid(&mut db, id)
+    let user = User::from_userid(&mut db, id)
         .await
         .map_err(|e| (Status::NotFound, e.to_string()))?;
     let user_guard = guards::users::UserGuard::from_model(user);

@@ -1,5 +1,5 @@
-use crate::db::Db;
 use crate::models::{Artifact, System};
+use crate::Db;
 use crate::{models, schema};
 use diesel::deserialize::FromSql;
 use diesel::prelude::*;

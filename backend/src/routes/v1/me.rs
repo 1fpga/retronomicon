@@ -1,5 +1,5 @@
-use crate::db::Db;
 use crate::guards::users::UserGuard;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::{CookieJar, Status};
 use rocket::serde::json::Json;

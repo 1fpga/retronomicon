@@ -124,6 +124,12 @@ impl<'v> UserIdOrUsername<'v> {
     }
 }
 
+impl<'v> From<Username<'v>> for UserIdOrUsername<'v> {
+    fn from(value: Username<'v>) -> Self {
+        Self::Username(value)
+    }
+}
+
 impl From<i32> for UserIdOrUsername<'static> {
     fn from(value: i32) -> Self {
         Self::Id(value)

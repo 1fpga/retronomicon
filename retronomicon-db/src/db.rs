@@ -7,9 +7,9 @@ pub mod ssl_pool;
 
 #[derive(Database)]
 #[database("retronomicon_db")]
-pub struct RetronomiconDb(ssl_pool::Pool);
+pub struct RetronomiconDbPool(ssl_pool::Pool);
 
-pub type Db = Connection<RetronomiconDb>;
+pub type Db = Connection<RetronomiconDbPool>;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/");
 

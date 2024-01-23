@@ -1,8 +1,8 @@
-use crate::db::Db;
 use crate::guards::users::UserGuard;
-use crate::{models, RetronomiconConfig};
+use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
 use diesel::OptionalExtension;
+use retronomicon_db::{models, Db};
 use rocket::http::hyper::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
 use rocket::http::CookieJar;
 use rocket::response::{Debug, Redirect};
@@ -45,29 +45,25 @@ async fn login_(
                     .await
                     .optional()?;
 
-            let user = if let Some((created, model, user)) = maybe_user {
-                if created && add_to_root {
-                    model
-                        .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
-                        .await?;
-                }
-                user
+            let (model, user) = if let Some((_, model, user)) = maybe_user {
+                (model, user)
             } else {
                 let maybe_user =
                     UserGuard::login_from_auth(db, None, email, auth_provider.to_string(), None)
                         .await
                         .optional()?;
-                if let Some((created, model, user)) = maybe_user {
-                    if created && add_to_root {
-                        model
-                            .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
-                            .await?;
-                    }
-                    user
+                if let Some((_, model, user)) = maybe_user {
+                    (model, user)
                 } else {
                     return Err(diesel::result::Error::NotFound);
                 }
             };
+
+            if add_to_root {
+                model
+                    .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
+                    .await?;
+            }
 
             user.update_cookie(cookies);
 
@@ -97,14 +93,14 @@ pub async fn github_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://api.github.com/user")
         .header(AUTHORIZATION, format!("token {}", token.access_token()))
         .header(ACCEPT, "application/vnd.github.v3+json")
         .header(USER_AGENT, "retronomicon-backend")
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -142,12 +138,12 @@ pub async fn google_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses")
         .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -161,7 +157,7 @@ pub async fn google_callback(
     if let Some(email) = email {
         login_(db, cookies, frontend_config, None, email, "google").await
     } else {
-        Err(Debug(Error::msg("failed to get email")))
+        Err(Debug(Error::msg("Failed to get email")))
     }
 }
 
@@ -186,12 +182,12 @@ pub async fn patreon_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://api.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email")
         .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -206,14 +202,14 @@ pub async fn patreon_callback(
     let data = match user_info.data {
         Some(data) => data,
         None => {
-            return Err(Debug(Error::msg("failed to get email")));
+            return Err(Debug(Error::msg("Failed to get email")));
         }
     };
     let email = match data.attributes.get("email") {
         Some(email) => match email.as_str() {
             Some(email) => email,
             None => {
-                return Err(Debug(Error::msg("invalid email type")));
+                return Err(Debug(Error::msg("Invalid email type")));
             }
         },
         None => {

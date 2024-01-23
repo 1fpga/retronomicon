@@ -246,6 +246,7 @@ dependencies = [
  "once_cell",
  "regex",
  "reqwest",
+ "retronomicon-db",
  "retronomicon-dto",
  "rocket",
  "rocket-multipart-form-data",
@@ -2156,6 +2157,31 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "retronomicon-db"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "jsonwebtoken",
+ "md5",
+ "retronomicon-dto",
+ "rocket",
+ "rocket_db_pools",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile 2.0.0",
+ "scoped-futures",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "tokio-postgres",
+ "tokio-postgres-rustls",
+ "tracing",
 ]
 
 [[package]]

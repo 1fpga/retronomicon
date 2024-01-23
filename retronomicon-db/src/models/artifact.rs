@@ -1,6 +1,6 @@
-use crate::db::Db;
 use crate::models::{Core, CoreRelease, Platform, System, User};
 use crate::schema;
+use crate::Db;
 use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
@@ -10,7 +10,6 @@ use diesel::upsert::on_constraint;
 use diesel::{AsExpression, FromSqlRow};
 use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
-use serde_json::Value as Json;
 use sha2::Digest;
 
 #[derive(Queryable, Debug, Identifiable)]
