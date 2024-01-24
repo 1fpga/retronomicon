@@ -4,7 +4,6 @@ use rocket::figment::value::{Map, Value};
 use rocket::figment::{map, Provider};
 use rocket::response::status::NoContent;
 use rocket::{get, http::Status, routes};
-use rocket_db_pools::Database;
 use rocket_oauth2::OAuth2;
 use rocket_okapi::rapidoc::{make_rapidoc, GeneralConfig, HideShowConfig, RapiDocConfig};
 use rocket_okapi::settings::UrlObject;

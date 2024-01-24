@@ -22,9 +22,7 @@ pub async fn me_update(
     }
 
     let username = form.username;
-    user.update(&mut db, form.into_inner())
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    user.update(&mut db, form.into_inner()).await?;
 
     // At this point, because of the unique constraint on username, we know
     // that the username is set.

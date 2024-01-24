@@ -1,17 +1,15 @@
 use crate::guards::users::UserGuard;
 use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
-use diesel::OptionalExtension;
 use retronomicon_db::{models, Db};
 use rocket::http::hyper::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
 use rocket::http::CookieJar;
 use rocket::response::{Debug, Redirect};
 use rocket::{get, State};
-use rocket_db_pools::diesel::AsyncConnection;
 use rocket_oauth2::TokenResponse;
-use scoped_futures::ScopedFutureExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use tracing::error;
 use wildmatch::WildMatch;
 
 async fn login_(
@@ -38,43 +36,24 @@ async fn login_(
         }
     }
 
-    db.transaction::<Redirect, diesel::result::Error, _>(|db| {
-        async move {
-            let maybe_user =
-                UserGuard::login_from_auth(db, username, email, auth_provider.to_string(), None)
-                    .await
-                    .optional()?;
+    let (_created, model, user) =
+        UserGuard::login_from_auth(&mut db, username, email, auth_provider.to_string(), None)
+            .await
+            .map_err(|(_, msg)| Debug(Error::msg(msg)))?;
 
-            let (model, user) = if let Some((_, model, user)) = maybe_user {
-                (model, user)
-            } else {
-                let maybe_user =
-                    UserGuard::login_from_auth(db, None, email, auth_provider.to_string(), None)
-                        .await
-                        .optional()?;
-                if let Some((_, model, user)) = maybe_user {
-                    (model, user)
-                } else {
-                    return Err(diesel::result::Error::NotFound);
-                }
-            };
-
-            if add_to_root {
-                model
-                    .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
-                    .await?;
-            }
-
-            user.update_cookie(cookies);
-
-            let base_url = config.base_url.clone();
-            Ok(Redirect::to(base_url))
+    if add_to_root {
+        if let Err(error) = model
+            .join_team(&mut db, config.root_team_id, models::UserTeamRole::Owner)
+            .await
+        {
+            error!(?error, "Failed to add user to root team");
         }
-        .scope_boxed()
-    })
-    .await
-    .context("Adding team")
-    .map_err(Debug)
+    }
+
+    user.update_cookie(cookies);
+
+    let base_url = config.base_url.clone();
+    Ok(Redirect::to(base_url))
 }
 
 /// User information to be retrieved from the GitHub API.

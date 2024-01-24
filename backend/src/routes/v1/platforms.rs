@@ -64,10 +64,7 @@ pub async fn platforms_create(
     // Get team.
     let team = models::Team::from_id_or_slug(&mut db, owner_team).await?;
 
-    let user = user
-        .into_model(&mut db)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    let user = user.into_model(&mut db).await?;
 
     // Check permissions.
     let role = user
@@ -121,10 +118,7 @@ pub async fn platforms_update(
 
     let platform = models::Platform::from_id_or_slug(&mut db, platform_id).await?;
 
-    let user = user
-        .into_model(&mut db)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    let user = user.into_model(&mut db).await?;
 
     // Check permissions.
     let role_in_old_team = user

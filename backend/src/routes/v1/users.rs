@@ -92,10 +92,7 @@ pub async fn users_update(
         .map_err(|e| (Status::NotFound, e.to_string()))?;
     let user_guard = guards::users::UserGuard::from_model(user);
 
-    user_guard
-        .update(&mut db, form.into_inner())
-        .await
-        .map_err(|e| (Status::NotFound, e.to_string()))?;
+    user_guard.update(&mut db, form.into_inner()).await?;
 
     Ok(Json(dto::Ok))
 }

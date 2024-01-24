@@ -1,6 +1,6 @@
 use diesel::PgConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use rocket_db_pools::{Connection, Database};
+use rocket_db_pools::{Connection, Database, Initializer};
 use tracing::info;
 
 pub mod ssl_pool;
@@ -8,6 +8,13 @@ pub mod ssl_pool;
 #[derive(Database)]
 #[database("retronomicon_db")]
 pub struct RetronomiconDbPool(ssl_pool::Pool);
+
+impl RetronomiconDbPool {
+    pub fn init() -> Initializer<Self> {
+        info!("Initializing database");
+        Database::init()
+    }
+}
 
 pub type Db = Connection<RetronomiconDbPool>;
 

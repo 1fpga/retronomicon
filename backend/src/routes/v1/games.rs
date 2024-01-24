@@ -5,9 +5,7 @@ use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{get, post, put};
-use rocket_db_pools::diesel::AsyncConnection;
 use rocket_okapi::openapi;
-use scoped_futures::ScopedFutureExt;
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -187,37 +185,29 @@ pub async fn games_add_artifact(
     game_id: u32,
     form: Json<Vec<dto::games::GameAddArtifactRequest<'_>>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
-    db.transaction(|db| {
-        async move {
-            let game = models::Game::get(db, game_id as i32).await?;
-            let game = match game {
-                Some(g) => g,
-                None => return Ok(None),
-            };
+    let game = models::Game::get(&mut db, game_id as i32)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?
+        .ok_or((Status::NotFound, "Not found".to_string()))?;
 
-            for a in form.into_inner() {
-                let artifact = models::Artifact::create_with_checksum(
-                    db,
-                    "",
-                    a.mime_type,
-                    a.md5.as_ref().map(|s| s.as_slice()),
-                    a.sha1.as_ref().map(|s| s.as_slice()),
-                    a.sha256.as_ref().map(|s| s.as_slice()),
-                    None,
-                    a.size,
-                )
-                .await?;
+    for a in form.into_inner() {
+        let artifact = models::Artifact::create_with_checksum(
+            &mut db,
+            "",
+            a.mime_type,
+            a.md5.as_ref().map(|s| s.as_slice()),
+            a.sha1.as_ref().map(|s| s.as_slice()),
+            a.sha256.as_ref().map(|s| s.as_slice()),
+            None,
+            a.size,
+        )
+        .await
+        .map_err(|e: _| (Status::InternalServerError, e.to_string()))?;
 
-                models::GameArtifact::create(db, game.id, artifact.id).await?;
-            }
-
-            Ok(Some(()))
-        }
-        .scope_boxed()
-    })
-    .await
-    .map_err(|e: diesel::result::Error| (Status::InternalServerError, e.to_string()))?
-    .ok_or((Status::NotFound, "Not found".to_string()))?;
+        models::GameArtifact::create(&mut db, game.id, artifact.id)
+            .await
+            .map_err(|e: _| (Status::InternalServerError, e.to_string()))?;
+    }
 
     Ok(Json(dto::Ok))
 }

@@ -76,10 +76,7 @@ pub async fn teams_create(
     let links = links.map(|l| json!(l));
     // Metadata must be a map.
     let metadata = metadata.map(|m| json!(m));
-    let user = owner
-        .into_model(db)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    let user = owner.into_model(db).await?;
 
     if !acls::can_create_team(&user) {
         return Err((Status::Unauthorized, "Insufficient permissions".to_string()));

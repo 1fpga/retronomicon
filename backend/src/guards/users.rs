@@ -1,5 +1,4 @@
 use jsonwebtoken::DecodingKey;
-use retronomicon_db::models;
 use retronomicon_db::models::{User, UserTeam};
 use retronomicon_db::Db;
 use retronomicon_dto as dto;
@@ -26,7 +25,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
         let mut db = request
             .guard::<Db>()
             .await
-            .expect("database connection guard");
+            .expect("Database connection guard");
         let user = match request.guard::<UserGuard>().await {
             Outcome::Success(user) => user,
             Outcome::Forward(_) => return Outcome::Forward(Status::Unauthorized),
@@ -51,9 +50,7 @@ pub struct AuthenticatedUserGuard {
 impl<'r> request::FromRequest<'r> for AuthenticatedUserGuard {
     type Error = String;
 
-    async fn from_request(
-        request: &'r request::Request<'_>,
-    ) -> request::Outcome<Self, Self::Error> {
+    async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
         UserGuard::from_request(request).await.and_then(|user| {
             if let Some(user) = user.into() {
                 Outcome::Success(user)
@@ -106,12 +103,12 @@ impl AuthenticatedUserGuard {
         self.inner.username.as_ref().unwrap()
     }
 
-    pub async fn into_model(self, db: &mut Db) -> Result<models::User, diesel::result::Error> {
+    pub async fn into_model(self, db: &mut Db) -> Result<User, (Status, String)> {
         self.inner.into_model(db).await
     }
 }
 
-/// A potentially non-fully signed up user for the website.
+/// A potentially non-fully signed-up user for the website.
 #[derive(Clone, Debug, Serialize, Deserialize, OpenApiFromRequest)]
 pub struct UserGuard {
     pub id: i32,
@@ -211,16 +208,21 @@ impl UserGuard {
         self.exp = expiry;
     }
 
-    pub async fn into_model(self, db: &mut Db) -> Result<User, diesel::result::Error> {
-        User::from_id(db, self.id).await
+    pub async fn into_model(self, db: &mut Db) -> Result<User, (Status, String)> {
+        User::from_id(db, self.id)
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))
     }
 
     pub fn from_model(user: User) -> Self {
         Self::new_unchecked(user.id, user.username, default_expiration_())
     }
 
-    pub async fn from_db(db: &mut Db, id: i32) -> Result<Self, diesel::result::Error> {
-        User::from_id(db, id).await.map(Self::from_model)
+    pub async fn from_db(db: &mut Db, id: i32) -> Result<Self, (Status, String)> {
+        User::from_id(db, id)
+            .await
+            .map(Self::from_model)
+            .map_err(|e| (Status::Unauthorized, e.to_string()))
     }
 
     /// Create a new user or select an existing one. This should only be used
@@ -231,7 +233,7 @@ impl UserGuard {
         email: &str,
         auth_provider: String,
         avatar_url: Option<String>,
-    ) -> Result<(bool, models::User, Self), diesel::result::Error> {
+    ) -> Result<(bool, User, Self), (Status, String)> {
         // Set username to None if it doesn't validate.
         let username = username.as_deref().and_then(|u| {
             dto::user::Username::new(u)
@@ -243,13 +245,15 @@ impl UserGuard {
                 .ok()
         });
 
-        let maybe_user = User::from_auth(db, email, &auth_provider).await?;
+        let maybe_user = User::from_auth(db, email, &auth_provider)
+            .await
+            .map_err(|e| (Status::Unauthorized, e.to_string()))?;
 
         if let Some(u) = maybe_user {
             return Ok((false, u.clone(), Self::from_model(u)));
         }
 
-        let user = models::User::create(
+        let user = User::create(
             db,
             username.as_deref(),
             None,
@@ -260,7 +264,8 @@ impl UserGuard {
             json!({}),
             json!({}),
         )
-        .await?;
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
         Ok((true, user.clone(), Self::from_model(user)))
     }
@@ -269,9 +274,11 @@ impl UserGuard {
         &self,
         db: &mut Db,
         form: dto::user::UserUpdate<'_>,
-    ) -> Result<(), diesel::result::Error> {
+    ) -> Result<(), (Status, String)> {
         let user = self.clone().into_model(db).await?;
-        user.update(db, form).await
+        user.update(db, form)
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))
     }
 
     pub fn update_cookie(&self, cookies: &CookieJar<'_>) {
