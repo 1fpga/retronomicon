@@ -1,15 +1,15 @@
-use jsonwebtoken::DecodingKey;
+use crate::JwtKeys;
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use retronomicon_db::models::{User, UserTeam};
 use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::{Cookie, CookieJar, Status};
 use rocket::outcome::{IntoOutcome, Outcome};
-use rocket::{request, Request};
+use rocket::{request, warn, Request, State};
 use rocket_okapi::OpenApiFromRequest;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::ops::{Deref, DerefMut};
-use tracing::warn;
 
 /// A user that is part of the root team.
 #[derive(Debug, Clone, Serialize, Deserialize, OpenApiFromRequest)]
@@ -148,12 +148,18 @@ impl<'r> request::FromRequest<'r> for UserGuard {
                 });
         }
 
+        let jwt_secret = match request.guard::<&State<JwtKeys>>().await {
+            Outcome::Success(secret) => &secret.decoding,
+            Outcome::Forward(_) => return Outcome::Forward(Status::Unauthorized),
+            Outcome::Error((status, _)) => return Outcome::Error((status, "Unauthorized".into())),
+        };
+
         // Check JWT from the headers.
         request
             .headers()
             .get_one("Authorization")
             .ok_or("Unauthorized".to_string())
-            .and_then(|key| UserGuard::decode_jwt(key).map_err(|e| e.to_string()))
+            .and_then(|key| UserGuard::decode_jwt(key, jwt_secret).map_err(|e| e.to_string()))
             .or_error(Status::Unauthorized)
             .and_then(validate_exp)
     }
@@ -270,6 +276,18 @@ impl UserGuard {
         Ok((true, user.clone(), Self::from_model(user)))
     }
 
+    pub async fn login_from_password(
+        db: &mut Db,
+        email: &str,
+        password: &str,
+        pepper: &[u8],
+    ) -> Result<(User, Self), (Status, String)> {
+        User::from_email(db, email, password, pepper)
+            .await
+            .map(|user| (user.clone(), Self::from_model(user)))
+            .map_err(|e| (Status::Unauthorized, e.to_string()))
+    }
+
     pub async fn update(
         &self,
         db: &mut Db,
@@ -286,12 +304,11 @@ impl UserGuard {
         cookies.add_private(self);
     }
 
-    pub fn decode_jwt(token: &str) -> Result<Self, jsonwebtoken::errors::Error> {
-        let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
+    pub fn decode_jwt(token: &str, key: &DecodingKey) -> Result<Self, jsonwebtoken::errors::Error> {
         let token = token.trim_start_matches("Bearer").trim();
         match jsonwebtoken::decode(
             token,
-            &DecodingKey::from_secret(secret.as_bytes()),
+            key,
             &jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS512),
         ) {
             Ok(token) => Ok(token.claims),
@@ -299,15 +316,14 @@ impl UserGuard {
         }
     }
 
-    pub fn create_jwt(mut self) -> Result<String, jsonwebtoken::errors::Error> {
-        let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set.");
+    pub fn create_jwt(mut self, key: &EncodingKey) -> Result<String, jsonwebtoken::errors::Error> {
         let expiration = default_expiration_();
         self.set_expiry(expiration);
 
         jsonwebtoken::encode(
             &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS512),
             &self,
-            &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+            &key,
         )
     }
 

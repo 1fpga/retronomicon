@@ -186,6 +186,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_passwords (user_id) {
+        user_id -> Int4,
+        #[max_length = 255]
+        password -> Varchar,
+        updated_at -> Timestamp,
+        needs_reset -> Bool,
+        #[max_length = 255]
+        validation_token -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
     use diesel::sql_types::*;
     use super::sql_types::UserTeamRole;
 
@@ -210,7 +222,6 @@ diesel::table! {
         email -> Varchar,
         #[max_length = 255]
         auth_provider -> Nullable<Varchar>,
-        need_reset -> Bool,
         deleted -> Bool,
         description -> Text,
         links -> Jsonb,
@@ -239,6 +250,7 @@ diesel::joinable!(system_release_artifacts -> system_releases (system_release_id
 diesel::joinable!(system_releases -> systems (system_id));
 diesel::joinable!(system_releases -> users (uploader_id));
 diesel::joinable!(systems -> teams (owner_team_id));
+diesel::joinable!(user_passwords -> users (user_id));
 diesel::joinable!(user_teams -> teams (team_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -258,6 +270,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     systems,
     tags,
     teams,
+    user_passwords,
     user_teams,
     users,
 );

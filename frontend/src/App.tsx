@@ -50,6 +50,26 @@ function App() {
         .then((res) => getUser());
   }
 
+  function login(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const email = data.get("email") as string;
+    const password = data.get("password") as string;
+    axios.post(process.env.REACT_APP_BACKEND_URL + "/login", {email, password})
+        .then((res) => getUser())
+        .catch((err) => alert(err.response?.data?.message || err.message));
+  }
+
+  function signup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const email = data.get("email") as string;
+    const password = data.get("password") as string;
+    axios.post(process.env.REACT_APP_BACKEND_URL + "/v1/signup", {email, password})
+        .then((res) => getUser())
+        .catch((err) => alert(err.response?.data?.message || err.message));
+  }
+
   return (
     <div className="App">
       <header className="App-header">
@@ -58,7 +78,37 @@ function App() {
           <a href={process.env.REACT_APP_BACKEND_URL + "/login/github"}>Login using Github</a><br/>
           <a href={process.env.REACT_APP_BACKEND_URL + "/login/patreon"}>Login using Patreon</a>
         </p>
+        <p>
+          <form onSubmit={login}>
+            <label>Email:</label>
+            <input type="text" name="email"/>
+            <br/>
+            <label>Password:</label>
+            <input type="password" name="password"/>
+            <br/>
+            <button type="submit">Login using email</button>
+          </form>
+        </p>
+
+        <hr/>
+
+        <p>
+          <form onSubmit={signup}>
+            <h1>Signup</h1>
+            <label>Email:</label>
+            <input type="text" name="email"/>
+            <br/>
+            <label>Password:</label>
+            <input type="password" name="password"/>
+            <br/>
+            <button type="submit">Signup</button>
+          </form>
+        </p>
+
         <button onClick={() => axios.post(process.env.REACT_APP_BACKEND_URL + "/logout").then(() => getUser())}>Logout</button>
+
+        <hr/>
+
         <p>
           Username: {username === "" ? "Not yet set" : JSON.stringify(username)}
           <br/>
@@ -69,18 +119,22 @@ function App() {
         <h3>Update user:</h3>
         <form onSubmit={updateUser}>
           <label>Username:</label>
-          <input type="text" name="username_" defaultValue={username || ""} /><br/>
+          <input type="text" name="username_" defaultValue={username || ""}/><br/>
           <label>Description:</label>
-          <input type="text" name="description_" defaultValue={description} /><br/>
+          <input type="text" name="description_" defaultValue={description}/><br/>
 
           <button type="submit">Update</button>
         </form>
 
         <hr style={{"width": "100%"}}/>
 
-        <button onClick={() => axios.post(process.env.REACT_APP_BACKEND_URL + "/me/token").then((res) => setToken(res.data.token))}>Get token</button>
+        <button
+            onClick={() => axios.post(process.env.REACT_APP_BACKEND_URL + "/me/token").then((res) => setToken(res.data.token))}>Get
+          token
+        </button>
         {token && <>
-          <br/><textarea style={{ font: "monospace" }} cols={80}>{token}</textarea><br/><button onClick={() => navigator.clipboard.writeText(token)}>Copy to clipboard</button>
+          <br/><textarea style={{font: "monospace"}} cols={80}>{token}</textarea><br/>
+          <button onClick={() => navigator.clipboard.writeText(token)}>Copy to clipboard</button>
         </>}
       </header>
     </div>

@@ -12,7 +12,7 @@ use diesel::upsert::on_constraint;
 use diesel::{AsExpression, FromSqlRow};
 use jsonwebtoken::DecodingKey;
 use retronomicon_dto as dto;
-use rocket::http::{Cookie, CookieJar, Status};
+use rocket::http::{Cookie, CookieJar};
 use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::request;
 use rocket_db_pools::diesel::scoped_futures::ScopedFutureExt;
@@ -21,6 +21,9 @@ use serde_json::{Value as Json, Value};
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
+
+mod password;
+pub use password::*;
 
 #[derive(Clone, Debug, Queryable, Identifiable, Selectable)]
 #[diesel(table_name = schema::users)]
@@ -34,7 +37,6 @@ pub struct User {
     pub email: String,
     pub auth_provider: Option<String>,
 
-    pub need_reset: bool,
     pub deleted: bool,
 
     pub description: String,
@@ -89,6 +91,30 @@ impl User {
         }
     }
 
+    pub async fn from_email(
+        db: &mut Db,
+        email: &str,
+        password: &str,
+        pepper: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        let user = schema::users::table
+            .filter(schema::users::email.eq(email))
+            .first::<User>(db)
+            .await?;
+        let (user, user_password) = UserPassword::verify_password(db, user, password, pepper)
+            .await?
+            .ok_or(anyhow::Error::msg("Invalid password"))?;
+
+        if user_password.needs_reset {
+            return Err(anyhow::Error::msg("Password needs reset"));
+        }
+        if user_password.validation_token.is_some() {
+            return Err(anyhow::Error::msg("Email not validated"));
+        }
+
+        Ok(user)
+    }
+
     pub async fn from_auth(
         db: &mut Db,
         email: &str,
@@ -98,7 +124,7 @@ impl User {
         dsl::users
             .filter(dsl::email.eq(email))
             .filter(dsl::auth_provider.eq(auth_provider))
-            .first::<models::User>(db)
+            .first::<User>(db)
             .await
             .optional()
     }
@@ -215,7 +241,6 @@ impl User {
                 dsl::email.eq(email),
                 dsl::auth_provider.eq(auth_provider),
                 dsl::description.eq(description.unwrap_or_default()),
-                dsl::need_reset.eq(false),
                 dsl::deleted.eq(false),
                 dsl::links.eq(links),
                 dsl::metadata.eq(metadata),
@@ -223,6 +248,23 @@ impl User {
             .returning(schema::users::all_columns)
             .get_result::<Self>(db)
             .await
+    }
+
+    pub async fn delete(&self, db: &mut Db) -> Result<(), diesel::result::Error> {
+        diesel::update(schema::users::table)
+            .filter(schema::users::id.eq(self.id))
+            .set(schema::users::deleted.eq(true))
+            .execute(db)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_row(&self, db: &mut Db) -> Result<(), diesel::result::Error> {
+        diesel::delete(schema::users::table)
+            .filter(schema::users::id.eq(self.id))
+            .execute(db)
+            .await?;
+        Ok(())
     }
 
     pub async fn update(

@@ -14,6 +14,7 @@ entity "**artifacts**" {
   *""sha256"": //bytea //
   *""size"": //integer //
   ""download_url"": //character varying(255) //
+  *""sha1"": //bytea //
 }
 
 entity "**core_release_artifacts**" {
@@ -170,6 +171,17 @@ entity "**teams**" {
   *""metadata"": //jsonb //
 }
 
+entity "**user_passwords**" {
+  User passwords, separated from the regular user table to allow for password resets.
+  ..
+  + ""user_id"": //integer [PK][FK]//
+  --
+  *""password"": //character varying(255) //
+  *""updated_at"": //timestamp without time zone //
+  *""needs_reset"": //boolean //
+  ""validation_token"": //character varying(255) //
+}
+
 entity "**user_teams**" {
   + ""team_id"": //integer [PK][FK]//
   + ""user_id"": //integer [PK][FK]//
@@ -188,7 +200,6 @@ entity "**users**" {
   ""avatar_url"": //character varying(255) //
   *""email"": //character varying(255) //
   ""auth_provider"": //character varying(255) //
-  *""need_reset"": //boolean //
   *""deleted"": //boolean //
   *""description"": //text //
   *""links"": //jsonb //
@@ -236,6 +247,8 @@ entity "**users**" {
 "**system_releases**"   }--  "**users**"
 
 "**systems**"   }--  "**teams**"
+
+"**user_passwords**"  ||-||  "**users**"
 
 "**user_teams**"   }--  "**users**"
 

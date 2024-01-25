@@ -3,13 +3,12 @@ use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
 use retronomicon_db::{models, Db};
 use rocket::http::hyper::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
-use rocket::http::CookieJar;
+use rocket::http::{CookieJar, Status};
 use rocket::response::{Debug, Redirect};
-use rocket::{get, State};
+use rocket::{error, get, State};
 use rocket_oauth2::TokenResponse;
 use serde_json::Value;
 use std::collections::BTreeMap;
-use tracing::error;
 use wildmatch::WildMatch;
 
 async fn login_(
@@ -36,7 +35,7 @@ async fn login_(
         }
     }
 
-    let (_created, model, user) =
+    let (_created, model, user_guard) =
         UserGuard::login_from_auth(&mut db, username, email, auth_provider.to_string(), None)
             .await
             .map_err(|(_, msg)| Debug(Error::msg(msg)))?;
@@ -46,11 +45,38 @@ async fn login_(
             .join_team(&mut db, config.root_team_id, models::UserTeamRole::Owner)
             .await
         {
-            error!(?error, "Failed to add user to root team");
+            error!("Failed to add user to root team: {:?}", error);
         }
     }
 
-    user.update_cookie(cookies);
+    user_guard.update_cookie(cookies);
+
+    let base_url = config.base_url.clone();
+    Ok(Redirect::to(base_url))
+}
+
+#[get("/auth/verify?<email>&<token>")]
+pub async fn login_token_callback(
+    mut db: Db,
+    cookies: &CookieJar<'_>,
+    config: &State<RetronomiconConfig>,
+    email: String,
+    token: String,
+) -> Result<Redirect, (Status, String)> {
+    let (user, user_password) =
+        models::UserPassword::from_validation_token(&mut db, &email, &token)
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?
+            .ok_or((Status::NotFound, "Invalid token".to_string()))?;
+
+    // At this point we know we have the right token, user and user_password entry.
+    user_password
+        .validated(&mut db)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    let user_guard = UserGuard::from_model(user);
+    user_guard.update_cookie(cookies);
 
     let base_url = config.base_url.clone();
     Ok(Redirect::to(base_url))

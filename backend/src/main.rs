@@ -1,5 +1,9 @@
+use crate::guards::emailer::SmtpConfig;
 use crate::routes::v1;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use jsonwebtoken::{DecodingKey, EncodingKey};
 use retronomicon_db::{run_migrations, RetronomiconDbPool};
+use rocket::figment::providers::Env;
 use rocket::figment::value::{Map, Value};
 use rocket::figment::{map, Provider};
 use rocket::response::status::NoContent;
@@ -11,7 +15,6 @@ use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
 use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
-use tracing::debug;
 
 mod fairings;
 mod guards;
@@ -19,11 +22,36 @@ mod guards;
 mod routes;
 mod utils;
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct RetronomiconConfig {
     pub base_url: String,
     pub root_team: Vec<String>,
     pub root_team_id: i32,
+
+    pub smtp: SmtpConfig,
+}
+
+pub struct JwtKeys {
+    pub encoding: EncodingKey,
+    pub decoding: DecodingKey,
+}
+
+impl JwtKeys {
+    pub fn from_base64(secret: &str) -> Self {
+        let secret = STANDARD.decode(secret).expect("Invalid base64 JWT secret");
+        let encoding = EncodingKey::from_secret(&secret);
+        let decoding = DecodingKey::from_secret(&secret);
+        Self { encoding, decoding }
+    }
+}
+
+pub struct DbPepper(pub Vec<u8>);
+
+impl DbPepper {
+    pub fn from_base64(secret: &str) -> Self {
+        let secret = STANDARD.decode(secret).expect("Invalid base64 pepper");
+        Self(secret)
+    }
 }
 
 #[get("/healthz")]
@@ -32,19 +60,23 @@ async fn health_handler() -> Result<NoContent, Status> {
 }
 
 fn database_config() -> impl Provider {
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool_size: u32 = str::parse(&env::var("DATABASE_POOL_SIZE").unwrap_or("10".to_string()))
-        .expect("Invalid DATABASE_POOL_SIZE");
-    let certs_files: Vec<String> = env::var("DATABASE_CERTS")
+    let db_url = Some(Value::from(
+        env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
+    ));
+    let pool_size = env::var("DATABASE_POOL_SIZE")
         .ok()
-        .map(|e| e.split(';').map(|c| c.to_string()).collect::<Vec<_>>())
-        .unwrap_or_default();
+        .and_then(|s| s.parse::<u32>().ok())
+        .map(Value::from);
+    let certs_files: Option<Value> = env::var("DATABASE_CERTS")
+        .ok()
+        .map(|e| Value::from(e.split(';').map(|c| Value::from(c)).collect::<Vec<_>>()));
 
-    let db: Map<_, Value> = map! {
+    let db: Map<_, Option<Value>> = map! {
         "url" => db_url.into(),
-        "pool_size" => pool_size.into(),
+        "pool_size" => pool_size,
         "certs" => certs_files.into(),
     };
+
     ("databases", map!["retronomicon_db" => db])
 }
 
@@ -68,8 +100,8 @@ fn oauth_config() -> impl Provider {
     ("oauth", oauth)
 }
 
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+#[rocket::launch]
+async fn rocket() -> _ {
     // The order is first, local environment variables, then global ones, then
     // only use development if in debug mode.
     dotenvy::from_filename(".env.local").ok();
@@ -82,13 +114,16 @@ async fn main() -> Result<(), rocket::Error> {
 
     let figment = rocket::Config::figment()
         .merge(database_config())
-        .merge(oauth_config());
+        .merge(oauth_config())
+        .merge(Env::prefixed("APP_").split("_"));
 
-    let v = figment.find_value("secret_key").unwrap();
-    env::set_var(
-        "JWT_SECRET",
-        v.into_string().expect("Could not find the secret_key."),
-    );
+    let secret_key = figment
+        .find_value("secret_key")
+        .expect("No secret key.")
+        .into_string()
+        .unwrap();
+    let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| secret_key.clone());
+    let db_pepper = env::var("DATABASE_PEPPER").unwrap_or_else(|_| secret_key.clone());
 
     let static_root = figment
         .find_value("static_root")
@@ -108,10 +143,7 @@ async fn main() -> Result<(), rocket::Error> {
 
     let prometheus = rocket_prometheus::PrometheusMetrics::new();
 
-    debug!(?figment);
-
-    let rocket = rocket::custom(figment);
-    let rocket = rocket
+    rocket::custom(figment)
         // The health endpoint.
         .mount("/", routes![health_handler])
         .mount("/api", routes::routes())
@@ -150,15 +182,13 @@ async fn main() -> Result<(), rocket::Error> {
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(OAuth2::<routes::auth::PatreonUserInfo>::fairing("patreon"))
         .attach(fairings::cors::Cors)
+        .manage(JwtKeys::from_base64(&jwt_secret))
+        .manage(DbPepper::from_base64(&db_pepper))
         .manage(guards::storage::StorageConfig {
             region: env::var("AWS_REGION").expect("AWS_REGION environment variable must be set"),
             cores_bucket: env::var("AWS_CORES_BUCKET").unwrap_or("retronomicon-cores".to_string()),
             cores_url_base: env::var("AWS_CORES_URL_BASE")
                 .unwrap_or("https://cores.retronomicon.land".to_string()),
         })
-        .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>());
-
-    rocket.launch().await?;
-
-    Ok(())
+        .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>())
 }

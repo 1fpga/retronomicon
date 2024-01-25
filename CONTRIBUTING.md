@@ -199,3 +199,22 @@ To start the frontend, run the following command:
 ```bash
 npm start -w frontend
 ```
+
+# Creating Users
+
+To create a user without using OAUTH and without an SMTP server, you can use the following command:
+
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"email":"some@email", "password":"some_password"}' \
+    http://localhost:8000/api/v1/signup
+```
+
+This will create a user with the given email and password in the database, and create a validation token.
+
+In the terminal logs, you will see a message like this:
+```
+Url to validate email: http://localhost:8000/api/auth/verify?email=hans@larsen.online&token=pV1lD2qqKiJ0R7_AT1uPVnmeBjUbMjvOSfH8FI02wmw
+```
+
+Then use the link to validate the email address (no password necessary).
+That should also set cookies and log you in.

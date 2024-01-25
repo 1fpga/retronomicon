@@ -1,4 +1,5 @@
 use reqwest::Url;
+use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
 use s3::creds::Credentials;
@@ -28,7 +29,7 @@ impl<'a> FromRequest<'a> for Storage {
             Some(storage) => storage,
             None => {
                 return Outcome::Error((
-                    rocket::http::Status::InternalServerError,
+                    Status::InternalServerError,
                     "Storage not configured".to_string(),
                 ))
             }
