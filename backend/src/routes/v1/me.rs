@@ -1,9 +1,10 @@
-use crate::db::Db;
 use crate::guards::users::UserGuard;
+use crate::JwtKeys;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::{CookieJar, Status};
 use rocket::serde::json::Json;
-use rocket::{get, post, put};
+use rocket::{get, post, put, State};
 use rocket_okapi::openapi;
 
 #[openapi(tag = "Users", ignore = "db")]
@@ -22,9 +23,7 @@ pub async fn me_update(
     }
 
     let username = form.username;
-    user.update(&mut db, form.into_inner())
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    user.update(&mut db, form.into_inner()).await?;
 
     // At this point, because of the unique constraint on username, we know
     // that the username is set.
@@ -43,8 +42,11 @@ pub async fn me(db: Db, user: UserGuard) -> Result<Json<dto::user::UserDetails>,
 /// Create a JWT token for the current logged-in user.
 #[openapi(tag = "Authentication")]
 #[post("/me/token")]
-pub async fn me_token(user: UserGuard) -> Result<Json<dto::AuthTokenResponse>, (Status, String)> {
-    user.create_jwt()
+pub async fn me_token(
+    user: UserGuard,
+    jwt_secret: &State<JwtKeys>,
+) -> Result<Json<dto::AuthTokenResponse>, (Status, String)> {
+    user.create_jwt(&jwt_secret.inner().encoding)
         .map(|token| Json(dto::AuthTokenResponse { token }))
         .map_err(|e| (Status::Unauthorized, e.to_string()))
 }

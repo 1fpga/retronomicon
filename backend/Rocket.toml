@@ -1,12 +1,19 @@
 [default]
 # The URL of the frontend. This is used to generate links.
-base_url = "/"
+base_url = "http://localhost:8000/"
 
 # Members (emails) of the root team. Use `*` and `?` as wildcards.
 root_team = [
     "*@retronomicon.dev",
+    "*@retronomicon.land",
 ]
 root_team_id = 1
+
+[default.smtp]
+port = 587
+# The login info should be set through an environment variable.
+from = "No Reply <no-reply@retronomicon.land>"
+email_verification_template = "../templates/email-verification.hbs"
 
 [default.limits]
 # 24 Megabytes

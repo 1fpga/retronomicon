@@ -1,10 +1,11 @@
-use crate::db::Db;
-use crate::{guards, models, schema};
+use crate::guards;
+use retronomicon_db::models;
+use retronomicon_db::types::FetchModel;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{delete, get, post};
-use rocket_db_pools::diesel::prelude::*;
 use rocket_okapi::openapi;
 
 /// List tags.
@@ -16,13 +17,10 @@ pub async fn tags(
 ) -> Result<Json<Vec<dto::tags::Tag>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    schema::tags::table
-        .offset(page * limit)
-        .limit(limit)
-        .load::<models::Tag>(&mut db)
+    models::Tag::list(&mut db, page, limit)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))
         .map(|u| Json(u.into_iter().map(Into::into).collect()))
+        .map_err(|e| (Status::InternalServerError, e.to_string()))
 }
 
 /// Create or update a tag.
@@ -35,16 +33,10 @@ pub async fn tags_create(
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let tag = tag.into_inner();
 
-    diesel::insert_into(schema::tags::table)
-        .values((
-            schema::tags::slug.eq(&tag.slug),
-            schema::tags::description.eq(&tag.description),
-            schema::tags::color.eq(tag.color as i64),
-        ))
-        .execute(&mut db)
+    models::Tag::create(&mut db, tag.slug, tag.description, tag.color)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))
         .map(|_| Json(dto::Ok))
+        .map_err(|e| (Status::InternalServerError, e.to_string()))
 }
 
 /// Get a tag information (including its description).
@@ -55,19 +47,10 @@ pub async fn tags_delete(
     _user: guards::users::RootUserGuard,
     tag_id: dto::types::IdOrSlug<'_>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
-    if let Some(tag_id) = tag_id.as_id() {
-        diesel::delete(schema::tags::table)
-            .filter(schema::tags::id.eq(tag_id))
-            .execute(&mut db)
-            .await
-    } else if let Some(slug) = tag_id.as_slug() {
-        diesel::delete(schema::tags::table)
-            .filter(schema::tags::slug.eq(slug))
-            .execute(&mut db)
-            .await
-    } else {
-        return Err((Status::BadRequest, "Invalid tag ID or slug".to_string()));
-    }
-    .map_err(|e| (Status::InternalServerError, e.to_string()))
-    .map(|_| Json(dto::Ok))
+    let tag = models::Tag::from_id_or_slug(&mut db, tag_id).await?;
+
+    tag.delete(&mut db)
+        .await
+        .map(|_| Json(dto::Ok))
+        .map_err(|e| (Status::InternalServerError, e.to_string()))
 }

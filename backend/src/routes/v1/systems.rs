@@ -1,8 +1,8 @@
-use crate::db::Db;
-use crate::models::Team;
-use crate::types::FetchModel;
+use crate::guards;
 use crate::utils::json;
-use crate::{guards, models};
+use retronomicon_db::models;
+use retronomicon_db::types::FetchModel;
+use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::Status;
 use rocket::serde::json::Json;
@@ -53,12 +53,9 @@ pub async fn systems_create(
     } = form.into_inner();
 
     // Get team.
-    let team = Team::from_id_or_slug(&mut db, owner_team).await?;
+    let team = models::Team::from_id_or_slug(&mut db, owner_team).await?;
 
-    let user = user
-        .into_model(&mut db)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    let user = user.into_model(&mut db).await?;
 
     // Check permissions.
     let role = user

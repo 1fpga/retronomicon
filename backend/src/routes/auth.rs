@@ -1,15 +1,12 @@
-use crate::db::Db;
 use crate::guards::users::UserGuard;
-use crate::{models, RetronomiconConfig};
+use crate::RetronomiconConfig;
 use anyhow::{Context, Error};
-use diesel::OptionalExtension;
+use retronomicon_db::{models, Db};
 use rocket::http::hyper::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
-use rocket::http::CookieJar;
+use rocket::http::{CookieJar, Status};
 use rocket::response::{Debug, Redirect};
-use rocket::{get, State};
-use rocket_db_pools::diesel::AsyncConnection;
+use rocket::{error, get, State};
 use rocket_oauth2::TokenResponse;
-use scoped_futures::ScopedFutureExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use wildmatch::WildMatch;
@@ -38,47 +35,51 @@ async fn login_(
         }
     }
 
-    db.transaction::<Redirect, diesel::result::Error, _>(|db| {
-        async move {
-            let maybe_user =
-                UserGuard::login_from_auth(db, username, email, auth_provider.to_string(), None)
-                    .await
-                    .optional()?;
+    let (_created, model, user_guard) =
+        UserGuard::login_from_auth(&mut db, username, email, auth_provider.to_string(), None)
+            .await
+            .map_err(|(_, msg)| Debug(Error::msg(msg)))?;
 
-            let user = if let Some((created, model, user)) = maybe_user {
-                if created && add_to_root {
-                    model
-                        .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
-                        .await?;
-                }
-                user
-            } else {
-                let maybe_user =
-                    UserGuard::login_from_auth(db, None, email, auth_provider.to_string(), None)
-                        .await
-                        .optional()?;
-                if let Some((created, model, user)) = maybe_user {
-                    if created && add_to_root {
-                        model
-                            .join_team(db, config.root_team_id, models::UserTeamRole::Owner)
-                            .await?;
-                    }
-                    user
-                } else {
-                    return Err(diesel::result::Error::NotFound);
-                }
-            };
-
-            user.update_cookie(cookies);
-
-            let base_url = config.base_url.clone();
-            Ok(Redirect::to(base_url))
+    if add_to_root {
+        if let Err(error) = model
+            .join_team(&mut db, config.root_team_id, models::UserTeamRole::Owner)
+            .await
+        {
+            error!("Failed to add user to root team: {:?}", error);
         }
-        .scope_boxed()
-    })
-    .await
-    .context("Adding team")
-    .map_err(Debug)
+    }
+
+    user_guard.update_cookie(cookies);
+
+    let base_url = config.base_url.clone();
+    Ok(Redirect::to(base_url))
+}
+
+#[get("/auth/verify?<email>&<token>")]
+pub async fn login_token_callback(
+    mut db: Db,
+    cookies: &CookieJar<'_>,
+    config: &State<RetronomiconConfig>,
+    email: String,
+    token: String,
+) -> Result<Redirect, (Status, String)> {
+    let (user, user_password) =
+        models::UserPassword::from_validation_token(&mut db, &email, &token)
+            .await
+            .map_err(|e| (Status::InternalServerError, e.to_string()))?
+            .ok_or((Status::NotFound, "Invalid token".to_string()))?;
+
+    // At this point we know we have the right token, user and user_password entry.
+    user_password
+        .validated(&mut db)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    let user_guard = UserGuard::from_model(user);
+    user_guard.update_cookie(cookies);
+
+    let base_url = config.base_url.clone();
+    Ok(Redirect::to(base_url))
 }
 
 /// User information to be retrieved from the GitHub API.
@@ -97,14 +98,14 @@ pub async fn github_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://api.github.com/user")
         .header(AUTHORIZATION, format!("token {}", token.access_token()))
         .header(ACCEPT, "application/vnd.github.v3+json")
         .header(USER_AGENT, "retronomicon-backend")
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -142,12 +143,12 @@ pub async fn google_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://people.googleapis.com/v1/people/me?personFields=names,emailAddresses")
         .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -161,7 +162,7 @@ pub async fn google_callback(
     if let Some(email) = email {
         login_(db, cookies, frontend_config, None, email, "google").await
     } else {
-        Err(Debug(Error::msg("failed to get email")))
+        Err(Debug(Error::msg("Failed to get email")))
     }
 }
 
@@ -186,12 +187,12 @@ pub async fn patreon_callback(
 ) -> Result<Redirect, Debug<Error>> {
     let json: Value = reqwest::Client::builder()
         .build()
-        .context("failed to build reqwest client")?
+        .context("Failed to build reqwest client")?
         .get("https://api.patreon.com/api/oauth2/v2/identity?fields%5Buser%5D=email")
         .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
         .send()
         .await
-        .context("failed to complete request")?
+        .context("Failed to complete request")?
         .json()
         .await
         .context("failed to deserialize response")?;
@@ -206,14 +207,14 @@ pub async fn patreon_callback(
     let data = match user_info.data {
         Some(data) => data,
         None => {
-            return Err(Debug(Error::msg("failed to get email")));
+            return Err(Debug(Error::msg("Failed to get email")));
         }
     };
     let email = match data.attributes.get("email") {
         Some(email) => match email.as_str() {
             Some(email) => email,
             None => {
-                return Err(Debug(Error::msg("invalid email type")));
+                return Err(Debug(Error::msg("Invalid email type")));
             }
         },
         None => {

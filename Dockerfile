@@ -10,6 +10,7 @@ RUN cd frontend && npm run build
 FROM rust:latest as builder
 WORKDIR /app
 COPY ./retronomicon-cli /app/retronomicon-cli
+COPY ./retronomicon-db /app/retronomicon-db
 COPY ./retronomicon-dto /app/retronomicon-dto
 COPY ./backend /app/backend
 COPY ./Cargo.toml /app/Cargo.toml

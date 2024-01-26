@@ -1,6 +1,6 @@
-use crate::db::Db;
 use crate::models::{Core, Platform, System, User};
 use crate::schema;
+use crate::Db;
 use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};

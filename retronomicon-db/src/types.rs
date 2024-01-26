@@ -1,4 +1,4 @@
-use crate::db::Db;
+use crate::Db;
 use retronomicon_dto as dto;
 use rocket::http::Status;
 

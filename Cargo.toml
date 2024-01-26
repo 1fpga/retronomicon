@@ -2,7 +2,7 @@
 members = [
     "backend",
     "datary",
-    "retronomicon-cli",
+    "retronomicon-cli", "retronomicon-db",
     "retronomicon-dto",
 ]
 resolver = "2"

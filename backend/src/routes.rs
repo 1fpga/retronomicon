@@ -8,6 +8,7 @@ pub fn routes() -> Vec<Route> {
     routes![
         auth::github_callback,
         auth::google_callback,
-        auth::patreon_callback
+        auth::patreon_callback,
+        auth::login_token_callback
     ]
 }

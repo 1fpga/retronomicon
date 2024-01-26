@@ -1,6 +1,6 @@
-use crate::db::Db;
 use crate::models::{Platform, System, Team};
 use crate::types::FromIdOrSlug;
+use crate::Db;
 use crate::{models, schema};
 use diesel::prelude::*;
 use diesel::{AsExpression, FromSqlRow, Identifiable, Queryable};

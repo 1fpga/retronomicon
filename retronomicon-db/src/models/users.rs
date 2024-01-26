@@ -1,6 +1,8 @@
-use crate::db::Db;
 use crate::models;
+use crate::models::Team;
 use crate::schema;
+use crate::schema::sql_types;
+use crate::Db;
 use chrono::NaiveDateTime;
 use diesel::deserialize::FromSql;
 use diesel::pg::{Pg, PgValue};
@@ -10,13 +12,18 @@ use diesel::upsert::on_constraint;
 use diesel::{AsExpression, FromSqlRow};
 use jsonwebtoken::DecodingKey;
 use retronomicon_dto as dto;
-use rocket::http::{Cookie, CookieJar, Status};
+use rocket::http::{Cookie, CookieJar};
 use rocket::outcome::{IntoOutcome, Outcome};
 use rocket::request;
+use rocket_db_pools::diesel::scoped_futures::ScopedFutureExt;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
-use serde_json::Value as Json;
+use serde_json::{Value as Json, Value};
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
+
+mod password;
+pub use password::*;
 
 #[derive(Clone, Debug, Queryable, Identifiable, Selectable)]
 #[diesel(table_name = schema::users)]
@@ -30,7 +37,6 @@ pub struct User {
     pub email: String,
     pub auth_provider: Option<String>,
 
-    pub need_reset: bool,
     pub deleted: bool,
 
     pub description: String,
@@ -83,6 +89,51 @@ impl User {
                 Self::from_username(db, name.into_inner().as_ref()).await
             }
         }
+    }
+
+    pub async fn from_email(
+        db: &mut Db,
+        email: &str,
+        password: &str,
+        pepper: &[u8],
+    ) -> Result<Self, anyhow::Error> {
+        let user = schema::users::table
+            .filter(schema::users::email.eq(email))
+            .first::<User>(db)
+            .await?;
+        let (user, user_password) = UserPassword::verify_password(db, user, password, pepper)
+            .await?
+            .ok_or(anyhow::Error::msg("Invalid password"))?;
+
+        if user_password.needs_reset {
+            return Err(anyhow::Error::msg("Password needs reset"));
+        }
+        if user_password.validation_token.is_some() {
+            return Err(anyhow::Error::msg("Email not validated"));
+        }
+
+        Ok(user)
+    }
+
+    pub async fn from_auth(
+        db: &mut Db,
+        email: &str,
+        auth_provider: &str,
+    ) -> Result<Option<Self>, diesel::result::Error> {
+        use schema::users::dsl;
+        dsl::users
+            .filter(dsl::email.eq(email))
+            .filter(dsl::auth_provider.eq(auth_provider))
+            .first::<User>(db)
+            .await
+            .optional()
+    }
+
+    pub async fn exists(
+        db: &mut Db,
+        user_id: dto::user::UserIdOrUsername<'_>,
+    ) -> Result<bool, diesel::result::Error> {
+        Ok(Self::from_userid(db, user_id).await.optional()?.is_some())
     }
 
     pub async fn get_user_team_and_role(
@@ -190,7 +241,6 @@ impl User {
                 dsl::email.eq(email),
                 dsl::auth_provider.eq(auth_provider),
                 dsl::description.eq(description.unwrap_or_default()),
-                dsl::need_reset.eq(false),
                 dsl::deleted.eq(false),
                 dsl::links.eq(links),
                 dsl::metadata.eq(metadata),
@@ -200,12 +250,91 @@ impl User {
             .await
     }
 
+    pub async fn delete(&self, db: &mut Db) -> Result<(), diesel::result::Error> {
+        diesel::update(schema::users::table)
+            .filter(schema::users::id.eq(self.id))
+            .set(schema::users::deleted.eq(true))
+            .execute(db)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn delete_row(&self, db: &mut Db) -> Result<(), diesel::result::Error> {
+        diesel::delete(schema::users::table)
+            .filter(schema::users::id.eq(self.id))
+            .execute(db)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn update(
+        &self,
+        db: &mut Db,
+        form: dto::user::UserUpdate<'_>,
+    ) -> Result<(), diesel::result::Error> {
+        #[derive(AsChangeset)]
+        #[diesel(table_name = schema::users)]
+        struct UserSignupChangeset<'a> {
+            username: Option<&'a str>,
+            display_name: Option<&'a str>,
+            description: Option<&'a str>,
+            links: Option<Json>,
+            metadata: Option<Json>,
+        }
+
+        db.transaction(|db| {
+            async move {
+                let mut changeset = UserSignupChangeset {
+                    username: form.username,
+                    display_name: form.display_name,
+                    description: form.description,
+                    links: None,
+                    metadata: None,
+                };
+
+                if let Some(links) = form.links.as_ref() {
+                    changeset.links = Some(serde_json::to_value(links).unwrap());
+                } else if form.add_links.is_some() || form.remove_links.is_some() {
+                    let mut links = BTreeMap::new();
+                    let user: models::User = schema::users::table.find(self.id).first(db).await?;
+
+                    if let Value::Object(user_links) = user.links {
+                        links.extend(user_links.into_iter());
+                    }
+
+                    if let Some(user_links) = form.add_links {
+                        for (k, v) in user_links.into_iter() {
+                            links.insert(k.to_string(), v.into());
+                        }
+                    }
+                    if let Some(user_links) = form.remove_links {
+                        for k in user_links.into_iter() {
+                            links.remove(&k.to_string());
+                        }
+                    }
+
+                    changeset.links = Some(serde_json::to_value(links).unwrap());
+                }
+
+                diesel::update(schema::users::table)
+                    .filter(schema::users::id.eq(self.id))
+                    .set(changeset)
+                    .execute(db)
+                    .await?;
+
+                Ok(())
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+
     pub async fn invite_to(
         &self,
         db: &mut Db,
         from_id: i32,
         team_id: i32,
-        role: models::UserTeamRole,
+        role: UserTeamRole,
     ) -> Result<(), diesel::result::Error> {
         use schema::user_teams::dsl;
 
@@ -300,5 +429,97 @@ impl User {
             .first::<models::UserTeamRole>(db)
             .await
             .optional()
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, FromSqlRow, AsExpression)]
+#[diesel(sql_type = sql_types::UserTeamRole)]
+pub enum UserTeamRole {
+    Owner = 2,
+    Admin = 1,
+    Member = 0,
+}
+
+impl UserTeamRole {
+    pub fn can_create_systems(&self) -> bool {
+        // Admins and owners can create systems.
+        *self >= Self::Admin
+    }
+
+    pub fn can_create_cores(&self) -> bool {
+        // Admins and owners can create cores.
+        *self >= Self::Admin
+    }
+}
+
+impl ToSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+        match *self {
+            Self::Owner => out.write_all(b"owner")?,
+            Self::Admin => out.write_all(b"admin")?,
+            Self::Member => out.write_all(b"member")?,
+        }
+        Ok(IsNull::No)
+    }
+}
+
+impl FromSql<sql_types::UserTeamRole, Pg> for UserTeamRole {
+    fn from_sql(bytes: PgValue<'_>) -> diesel::deserialize::Result<Self> {
+        match bytes.as_bytes() {
+            b"owner" => Ok(Self::Owner),
+            b"admin" => Ok(Self::Admin),
+            b"member" => Ok(Self::Member),
+            _ => Err("Unrecognized enum variant".into()),
+        }
+    }
+}
+
+impl From<UserTeamRole> for dto::types::UserTeamRole {
+    fn from(value: UserTeamRole) -> Self {
+        match value {
+            UserTeamRole::Owner => Self::Owner,
+            UserTeamRole::Admin => Self::Admin,
+            UserTeamRole::Member => Self::Member,
+        }
+    }
+}
+
+impl From<dto::types::UserTeamRole> for UserTeamRole {
+    fn from(value: dto::types::UserTeamRole) -> Self {
+        match value {
+            dto::types::UserTeamRole::Owner => Self::Owner,
+            dto::types::UserTeamRole::Admin => Self::Admin,
+            dto::types::UserTeamRole::Member => Self::Member,
+        }
+    }
+}
+
+#[derive(Queryable, Debug, Identifiable, Selectable, Associations)]
+#[diesel(belongs_to(Team))]
+#[diesel(belongs_to(User))]
+#[diesel(table_name = schema::user_teams)]
+#[diesel(primary_key(team_id, user_id))]
+pub struct UserTeam {
+    pub team_id: i32,
+    pub user_id: i32,
+    pub role: UserTeamRole,
+    pub invite_from: Option<i32>,
+}
+
+impl UserTeam {
+    pub async fn user_is_in_team(
+        db: &mut crate::Db,
+        user_id: i32,
+        team_id: i32,
+    ) -> Result<bool, diesel::result::Error> {
+        use schema::user_teams;
+
+        Ok(user_teams::table
+            .filter(user_teams::user_id.eq(user_id))
+            .filter(user_teams::team_id.eq(team_id))
+            .first::<Self>(db)
+            .await
+            .optional()?
+            .is_some())
     }
 }
