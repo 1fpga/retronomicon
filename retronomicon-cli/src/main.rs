@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use clap_verbosity_flag::{InfoLevel, Level as VerbosityLevel};
-use reqwest::RequestBuilder;
+use reqwest::{Client, RequestBuilder, Response, StatusCode};
 use retronomicon_dto as dto;
 use retronomicon_dto::client::ClientConfig;
 use retronomicon_dto::encodings::HexString;
@@ -71,8 +71,20 @@ enum Command {
     /// User specific commands.
     Users(UserOpts),
 
+    /// Signup using email + password.
+    Signup(LoginOpts),
+
+    /// Login to the server, and get an authentication token.
+    Login(LoginOpts),
+
     /// Returns the authentication information.
     Whoami,
+}
+
+#[derive(Debug, Parser)]
+pub struct LoginOpts {
+    /// The email to use for authentication. If omitted, the user will be prompted for it.
+    email: Option<String>,
 }
 
 #[derive(Debug, Parser)]
@@ -382,15 +394,15 @@ pub struct GameAddArtifactOpts {
 
     /// MD5 checksum of the file, in hexadecimal.
     #[clap(long)]
-    md5: Option<dto::encodings::HexString>,
+    md5: Option<HexString>,
 
     /// SHA1 checksum of the file, in hexadecimal.
     #[clap(long)]
-    sha1: Option<dto::encodings::HexString>,
+    sha1: Option<HexString>,
 
     /// SHA256 checksum of the file, in hexadecimal.
     #[clap(long)]
-    sha256: Option<dto::encodings::HexString>,
+    sha256: Option<HexString>,
 }
 
 impl GameAddArtifactOpts {
@@ -623,7 +635,7 @@ pub struct UserGet {
     id: UserIdOrUsername<'static>,
 }
 
-fn output_json<J: Serialize>(value: J, opts: &Opts) -> Result<(), anyhow::Error> {
+fn output_json<J: Serialize>(value: J, opts: &Opts) -> Result<(), Error> {
     println!(
         "{}",
         if opts.pretty {
@@ -663,9 +675,7 @@ fn links_dictionary_from_arg(arg: &Vec<String>) -> Option<BTreeMap<&str, &str>> 
     }
 }
 
-fn metadata_dictionary_from_arg(
-    arg: &Vec<String>,
-) -> Result<Option<BTreeMap<&str, Value>>, anyhow::Error> {
+fn metadata_dictionary_from_arg(arg: &Vec<String>) -> Result<Option<BTreeMap<&str, Value>>, Error> {
     if arg.is_empty() {
         Ok(None)
     } else {
@@ -687,7 +697,28 @@ fn client(opts: &Opts) -> dto::client::V1Client {
     dto::client::V1Client::new(config).unwrap()
 }
 
+async fn send_<Q>(
+    client: &Client,
+    method: reqwest::Method,
+    path: &str,
+    opts: &Opts,
+    request: Q,
+) -> Result<Response, Error>
+where
+    Q: Serialize,
+{
+    let request = update_request(
+        client.request(method, opts.server.join(path)?),
+        opts,
+        Some(request),
+    )
+    .build()?;
+
+    client.execute(request).await.map_err(Into::into)
+}
+
 async fn send<Q, R>(
+    client: &Client,
     method: reqwest::Method,
     path: &str,
     opts: &Opts,
@@ -697,24 +728,16 @@ where
     Q: Serialize,
     R: for<'de> Deserialize<'de>,
 {
-    let client = reqwest::Client::new();
-    let request = update_request(
-        client.request(method, opts.server.join(path)?),
-        opts,
-        Some(request),
-    )
-    .build()?;
+    let response = send_(&client, method, path, opts, request).await?;
 
-    let response = client.execute(request).await?;
-
-    if response.status().is_success() {
-        response.json().await.map_err(Into::into)
-    } else {
-        Err(Error::msg(format!(
-            "Status code: {}\n{}",
-            response.status(),
+    // Can't use `error_for_status()` as it consumes the response and does not
+    // provide the body of the response.
+    match response.status() {
+        StatusCode::OK => Ok(response.json().await?),
+        e => Err(Error::msg(format!(
+            "Status code: {e}\n{}",
             response.text().await?
-        )))
+        ))),
     }
 }
 
@@ -722,7 +745,7 @@ async fn get<R>(path: &str, opts: &Opts) -> Result<R, Error>
 where
     R: for<'de> Deserialize<'de>,
 {
-    send(reqwest::Method::GET, path, opts, ()).await
+    send(&Client::new(), reqwest::Method::GET, path, opts, ()).await
 }
 
 async fn post<Q, R>(path: &str, opts: &Opts, request: Q) -> Result<R, Error>
@@ -730,10 +753,10 @@ where
     Q: Serialize,
     R: for<'de> Deserialize<'de>,
 {
-    send(reqwest::Method::POST, path, opts, request).await
+    send(&Client::new(), reqwest::Method::POST, path, opts, request).await
 }
 
-async fn whoami(opts: &Opts) -> Result<(), anyhow::Error> {
+async fn whoami(opts: &Opts) -> Result<(), Error> {
     let response: dto::user::UserDetails = get("/api/v1/me", opts).await?;
     output_json(response, opts)
 }
@@ -747,7 +770,7 @@ fn to_query(paging: &dto::params::PagingParams) -> String {
     }
 }
 
-async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyhow::Error> {
+async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), Error> {
     let core = IdOrSlug::parse(&release_opts.core);
 
     match &release_opts.command {
@@ -832,7 +855,7 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
     }
 }
 
-async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
+async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), Error> {
     match &core_opts.command {
         CoreCommand::Releases(release_opts) => release(opts, release_opts).await,
 
@@ -888,7 +911,7 @@ impl<'v> From<&'v UpdateUser> for dto::user::UserUpdate<'v> {
     }
 }
 
-async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
+async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), Error> {
     match &user_opts.command {
         UserCommand::Update(update_opts) => {
             let update = update_opts.into();
@@ -908,7 +931,7 @@ async fn user(opts: &Opts, user_opts: &UserOpts) -> Result<(), anyhow::Error> {
     }
 }
 
-async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyhow::Error> {
+async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), Error> {
     match &platform_opts.command {
         PlatformCommand::List(list_opts) => {
             let query = format!("/api/v1/platforms?{}", to_query(&list_opts.paging));
@@ -935,7 +958,7 @@ async fn platform(opts: &Opts, platform_opts: &PlatformOpts) -> Result<(), anyho
     }
 }
 
-async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Error> {
+async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), Error> {
     match &system_opts.command {
         SystemCommand::List(list_opts) => {
             let query = format!("/api/v1/systems?{}", to_query(&list_opts.paging));
@@ -978,7 +1001,7 @@ async fn system(opts: &Opts, system_opts: &SystemOpts) -> Result<(), anyhow::Err
     }
 }
 
-async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
+async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), Error> {
     match &team_opts.command {
         TeamCommand::List(list_opts) => {
             let query = format!("/api/v1/teams?{}", to_query(&list_opts.paging));
@@ -1014,7 +1037,7 @@ async fn team(opts: &Opts, team_opts: &TeamOpts) -> Result<(), anyhow::Error> {
     }
 }
 
-async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
+async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), Error> {
     match &game_opts.command {
         GamesCommand::List(list_opts) => output_json(
             client(opts)
@@ -1067,7 +1090,7 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
                         developer: "",
                         links: Default::default(),
                         system: update_opts.system.clone(),
-                        system_unique_id: (game.id.map(|x| x as i32)).unwrap_or_else(|| {
+                        system_unique_id: game.id.map(|i| i as i32).unwrap_or_else(|| {
                             i -= 1;
                             i
                         }),
@@ -1093,8 +1116,8 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
                                 .first_raw()
                                 .unwrap_or("application/octet-stream"),
                                 size: r.size as i32,
-                                md5: r.md5.map(|x| hex::decode(x).unwrap().into()),
-                                sha1: r.sha1.map(|x| hex::decode(x).unwrap().into()),
+                                md5: r.md5.map(|x| hex::decode(&x).unwrap().into()),
+                                sha1: r.sha1.map(|x| hex::decode(&x).unwrap().into()),
                                 sha256: Some(vec![].into()),
                             }],
                         )
@@ -1104,6 +1127,67 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), anyhow::Error> {
             Ok(())
         }
     }
+}
+
+trait Prompter {
+    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error>;
+}
+
+impl Prompter for Option<String> {
+    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error> {
+        match self {
+            Some(x) => Ok(x.clone()),
+            None => {
+                std::io::stderr().write_all(prompt.as_bytes()).unwrap();
+                let mut value = String::new();
+                std::io::stdin().read_line(&mut value)?;
+                Ok(value)
+            }
+        }
+    }
+}
+
+async fn login(opts: &Opts, login_opts: &LoginOpts) -> Result<(), Error> {
+    let email = login_opts.email.or_prompt("Email: ")?;
+    let password = rpassword::prompt_password("Password: ")?;
+
+    let client = reqwest::Client::builder().cookie_store(true).build()?;
+
+    send::<_, dto::Ok>(
+        &client,
+        reqwest::Method::POST,
+        "/api/v1/login",
+        opts,
+        dto::auth::LoginRequest {
+            email: email.trim(),
+            password: &password,
+        },
+    )
+    .await?;
+
+    let response: dto::AuthTokenResponse =
+        send(&client, reqwest::Method::POST, "/api/v1/me/token", opts, ()).await?;
+
+    println!("{}", response.token);
+
+    Ok(())
+}
+
+async fn signup(opts: &Opts, signup_opts: &LoginOpts) -> Result<(), Error> {
+    let email = signup_opts.email.or_prompt("Email: ")?;
+    let password = rpassword::prompt_password("Password: ")?;
+
+    let response: dto::auth::SignupResponse = post(
+        "/api/v1/signup",
+        opts,
+        dto::auth::SignupRequest {
+            email: email.trim(),
+            password: &password,
+        },
+    )
+    .await?;
+
+    output_json(response, opts)
 }
 
 #[tokio::main]
@@ -1133,12 +1217,14 @@ async fn main() {
         Command::Whoami => whoami(&opts).await,
         Command::Cores(core_opts) => core(&opts, core_opts).await,
         Command::Games(games_opts) => game(&opts, games_opts).await,
+        Command::Login(login_opts) => login(&opts, login_opts).await,
+        Command::Signup(login_opts) => signup(&opts, login_opts).await,
     };
 
     match result {
         Ok(()) => {}
         Err(e) => {
-            eprintln!("{}", e);
+            std::io::stderr().write_fmt(format_args!("{}", e)).unwrap();
             std::process::exit(1);
         }
     }

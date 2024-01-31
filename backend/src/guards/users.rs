@@ -313,15 +313,13 @@ impl UserGuard {
     }
 
     pub fn decode_jwt(token: &str, key: &DecodingKey) -> Result<Self, jsonwebtoken::errors::Error> {
-        let token = token.trim_start_matches("Bearer").trim();
-        match jsonwebtoken::decode(
+        let token = token.trim_start_matches("Bearer ").trim();
+        jsonwebtoken::decode(
             token,
             key,
             &jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS512),
-        ) {
-            Ok(token) => Ok(token.claims),
-            Err(e) => Err(e),
-        }
+        )
+        .map(|token| token.claims)
     }
 
     pub fn create_jwt(mut self, key: &EncodingKey) -> Result<String, jsonwebtoken::errors::Error> {

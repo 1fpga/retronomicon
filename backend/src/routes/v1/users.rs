@@ -47,6 +47,7 @@ pub async fn users(
 #[get("/users/<id>")]
 pub async fn users_details(
     mut db: Db,
+    user_guard: guards::users::UserGuard,
     id: dto::user::UserIdOrUsername<'_>,
 ) -> Result<Json<dto::user::UserDetails>, (Status, String)> {
     let (user, teams) = User::get_user_with_teams(&mut db, id)
@@ -54,7 +55,7 @@ pub async fn users_details(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::NotFound, "User not found".to_string()))?;
 
-    if user.username.is_none() {
+    if user.username.is_none() && user_guard.id != user.id {
         return Err((Status::NotFound, "User not found".to_string()));
     }
 
@@ -70,7 +71,7 @@ pub async fn users_details(
         teams,
         user: dto::user::UserDetailsInner {
             id: user.id,
-            username: user.username.unwrap(),
+            username: user.username,
             description: user.description,
             links: user.links,
             metadata: user.metadata,

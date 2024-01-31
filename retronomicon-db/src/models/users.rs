@@ -193,16 +193,11 @@ impl User {
         Option<(Self, Vec<(i32, String, String, models::UserTeamRole)>)>,
         diesel::result::Error,
     > {
-        let user = Self::from_userid(db, user_id).await.optional()?;
-        if user.is_none() {
-            return Ok(None);
-        }
-        let user = user.unwrap();
+        let user = match Self::from_userid(db, user_id).await.optional()? {
+            Some(user) => user,
+            None => return Ok(None),
+        };
 
-        let username = user
-            .username
-            .as_ref()
-            .ok_or(diesel::result::Error::NotFound)?;
         if user.deleted {
             return Err(diesel::result::Error::NotFound);
         }
