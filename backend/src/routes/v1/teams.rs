@@ -5,6 +5,7 @@ use retronomicon_db::models::Team;
 use retronomicon_db::types::FetchModel;
 use retronomicon_db::Db;
 use retronomicon_dto as dto;
+use retronomicon_dto::types::IdOrSlug;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::{delete, get, post, put};
@@ -19,7 +20,7 @@ pub async fn teams(
 ) -> Result<Json<Vec<dto::teams::Team>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    models::Team::list(&mut db, page, limit)
+    Team::list(&mut db, page, limit)
         .await
         .map(|t| Json(t.into_iter().map(Into::into).collect()))
         .map_err(|e| (Status::InternalServerError, e.to_string()))
@@ -29,7 +30,7 @@ pub async fn teams(
 #[get("/teams/<id>")]
 pub async fn teams_details(
     mut db: Db,
-    id: dto::types::IdOrSlug<'_>,
+    id: IdOrSlug<'_>,
 ) -> Result<Json<dto::teams::TeamDetails>, (Status, String)> {
     let team = Team::from_id_or_slug(&mut db, id).await?;
     let users = team
@@ -187,12 +188,12 @@ pub async fn teams_delete(
 pub async fn invite(
     mut db: Db,
     admin: AuthenticatedUserGuard,
-    team_id: i32,
+    team_id: IdOrSlug<'_>,
     form: Json<dto::teams::TeamInvite<'_>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let db = &mut db;
     let (admin_user, team, admin_role) =
-        models::User::get_user_team_and_role(db, admin.id.into(), team_id.into())
+        models::User::get_user_team_and_role(db, admin.id.into(), team_id)
             .await
             .map_err(|e| (Status::InternalServerError, e.to_string()))?
             .ok_or((Status::NotFound, "Not found".to_string()))?;
@@ -219,13 +220,14 @@ pub async fn invite(
 pub async fn invite_accept(
     mut db: Db,
     invited: AuthenticatedUserGuard,
-    team_id: i32,
+    team_id: IdOrSlug<'_>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let db = &mut db;
     let user = models::User::from_id(db, invited.id)
         .await
         .map_err(|e| (Status::NotFound, e.to_string()))?;
-    user.accept_invitation(db, team_id)
+    let team = Team::from_id_or_slug(db, team_id).await?;
+    user.accept_invitation(db, team.id)
         .await
         .map_err(|e| (Status::NotFound, e.to_string()))?;
 

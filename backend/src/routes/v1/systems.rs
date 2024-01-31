@@ -9,6 +9,7 @@ use rocket::serde::json::Json;
 use rocket::{get, post};
 use rocket_okapi::openapi;
 use serde_json::json;
+use std::collections::BTreeMap;
 
 #[openapi(tag = "Systems", ignore = "db")]
 #[get("/systems?<paging..>")]
@@ -75,8 +76,8 @@ pub async fn systems_create(
         name,
         description,
         manufacturer,
-        json!(links),
-        json!(metadata),
+        json!(links.unwrap_or_else(|| BTreeMap::new())),
+        json!(metadata.unwrap_or_else(|| BTreeMap::new())),
         team.id,
     )
     .await

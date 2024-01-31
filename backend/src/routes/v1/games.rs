@@ -292,7 +292,7 @@ pub async fn games_images_upload(
         .await
         .map_err(|e| (Status::BadRequest, e.to_string()))?;
 
-    for (_name, files) in &multipart_form_data.files {
+    for files in multipart_form_data.files.values() {
         for file in files {
             let filename = file
                 .file_name

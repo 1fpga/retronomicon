@@ -104,3 +104,7 @@ out
 
 # Rust stuff
 target/
+
+# Rocket configuration
+Rocket.local.toml
+backend/Rocket.local.toml

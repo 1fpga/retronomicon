@@ -45,7 +45,7 @@ where
     type Error = &'static str;
 
     fn from_param(param: &'v str) -> Result<Self, Self::Error> {
-        Self::from_str(&param)
+        Self::from_str(param)
     }
 }
 
@@ -74,7 +74,7 @@ where
                 Bound::Included(ge.parse::<T>().map_err(|_| LEFT_ERR)?),
                 Bound::Unbounded,
             )
-        } else if let Some(gt) = s.strip_prefix(">") {
+        } else if let Some(gt) = s.strip_prefix('>') {
             (
                 Bound::Excluded(gt.parse::<T>().map_err(|_| LEFT_ERR)?),
                 Bound::Unbounded,
@@ -84,7 +84,7 @@ where
                 Bound::Unbounded,
                 Bound::Included(le.parse::<T>().map_err(|_| RIGHT_ERR)?),
             )
-        } else if let Some(lt) = s.strip_prefix("<") {
+        } else if let Some(lt) = s.strip_prefix('<') {
             (
                 Bound::Unbounded,
                 Bound::Excluded(lt.parse::<T>().map_err(|_| RIGHT_ERR)?),

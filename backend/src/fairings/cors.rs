@@ -18,7 +18,6 @@ impl Fairing for Cors {
         if request.method() != rocket::http::Method::Options {
             return;
         }
-        eprintln!("CORS request");
 
         let origin = request.headers().get_one("Origin");
         response.set_header(Header::new(

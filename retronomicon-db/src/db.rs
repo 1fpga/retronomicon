@@ -20,11 +20,10 @@ pub type Db = Connection<RetronomiconDbPool>;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/");
 
-pub fn run_migrations() {
+pub fn run_migrations(database_url: &str) {
     use diesel::Connection;
 
-    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set.");
-    let mut connection = PgConnection::establish(&database_url)
+    let mut connection = PgConnection::establish(database_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url));
 
     // This will run the necessary migrations.

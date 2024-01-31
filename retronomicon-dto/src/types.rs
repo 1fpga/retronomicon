@@ -4,7 +4,9 @@ use std::convert::Infallible;
 use std::str::FromStr;
 use strum::{Display, EnumString};
 
-#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, EnumString, Display)]
+#[derive(
+    Copy, Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, EnumString, Display,
+)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -60,6 +62,16 @@ mod rocket_impls {
 
         fn from_uri_param(param: &'v str) -> Self::Target {
             Self::parse(param)
+        }
+    }
+
+    impl<T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::FromUriParam<T, i32>
+        for IdOrSlug<'static>
+    {
+        type Target = IdOrSlug<'static>;
+
+        fn from_uri_param(param: i32) -> Self::Target {
+            IdOrSlug::Id(param)
         }
     }
 }

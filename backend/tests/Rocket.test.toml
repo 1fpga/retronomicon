@@ -1,0 +1,20 @@
+# File used for default debugging settings.
+# This WILL NOT (and SHOULD NOT) be used in production. It contains keys
+# that are valid but should not be used in a real production environment.
+
+log_level = "off"
+
+# This will also be used as the JWT key and the database pepper.
+secret_key = "dH+kbvuRgr6z/OQaycGZEjMFKRFnhBlJJha9CYnWCNNpnsGHSGcOb+HZsmwLGoOf84Xz5d1EGMT/1EnVJxoDFw=="
+
+[debug]
+additional_root_team = ["*@cucumber-admin-*"]
+bypass_email_validation = ["*"]
+
+[s3]
+region = "http://localhost:9000"
+access_key = "<USE_ENV_VARS>"
+secret_key = "<USE_ENV_VARS>"
+
+[databases.retronomicon_db]
+url = "postgres://local_user:mysecretpassword@localhost:5432/local_retronomicon"

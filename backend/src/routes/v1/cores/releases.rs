@@ -219,7 +219,7 @@ pub async fn cores_releases_artifacts_list(
                     rocket::uri!(
                         "/api/v1/",
                         cores_releases_artifacts_download(
-                            &core.slug,
+                            core.slug.as_str(),
                             release.id as u32,
                             artifact.id as u32
                         )
@@ -342,7 +342,7 @@ pub async fn cores_releases_artifacts_upload(
         .await
         .map_err(|e| (Status::BadRequest, e.to_string()))?;
 
-    for (_name, files) in &multipart_form_data.files {
+    for files in multipart_form_data.files.values() {
         for file in files {
             let filename = file
                 .file_name
@@ -382,7 +382,7 @@ pub async fn cores_releases_artifacts_upload(
                 &release,
                 &storage,
                 &filename,
-                &mimetype.to_string(),
+                mimetype.as_ref(),
                 &file_data,
             )
             .await?;

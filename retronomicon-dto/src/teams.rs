@@ -1,4 +1,4 @@
-use crate::types::UserTeamRole;
+use crate::types::{IdOrSlug, UserTeamRole};
 use crate::user::{UserIdOrUsername, UserRef};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -10,6 +10,12 @@ pub struct TeamRef {
     pub id: i32,
     pub name: String,
     pub slug: String,
+}
+
+impl From<TeamRef> for IdOrSlug<'static> {
+    fn from(t: TeamRef) -> Self {
+        Self::Id(t.id)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,7 +69,7 @@ pub struct TeamCreateRequest<'a> {
 }
 
 /// Response when creating a team.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct TeamCreateResponse {
     pub id: i32,

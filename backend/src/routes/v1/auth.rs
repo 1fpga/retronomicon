@@ -19,6 +19,7 @@ use serde_json::json;
 pub async fn signup(
     mut db: Db,
     form: Json<dto::auth::SignupRequest<'_>>,
+    cookies: &CookieJar<'_>,
     pepper: &State<DbPepper>,
     config: &State<RetronomiconConfig>,
     emailer: EmailGuard,
@@ -45,6 +46,22 @@ pub async fn signup(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
     if let Some(token) = user_password.validation_token {
+        // Check if we bypass the validation_token and go straight to login.
+        if config.inner().bypass_email_validation(form.email) {
+            crate::routes::auth::login_token_callback(
+                db,
+                cookies,
+                config,
+                form.email.to_string(),
+                token,
+            )
+            .await?;
+            return Ok(Json(dto::auth::SignupResponse {
+                email: form.email.to_string(),
+                id: user.id,
+            }));
+        }
+
         // Send an email.
         emailer.send_email_verification(
             &user.email,
@@ -60,7 +77,10 @@ pub async fn signup(
             .as_str(),
         )?;
 
-        Ok(Json(dto::auth::SignupResponse { email: user.email }))
+        Ok(Json(dto::auth::SignupResponse {
+            email: user.email,
+            id: user.id,
+        }))
     } else {
         let _ = user_password.delete(&mut db).await;
         let _ = user.delete_row(&mut db).await;
