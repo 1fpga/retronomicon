@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::Display;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
@@ -85,12 +86,14 @@ impl DerefMut for HexString {
     }
 }
 
+impl Display for HexString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&hex::encode(&self.0))
+    }
+}
+
 impl HexString {
     pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
-    }
-
-    pub fn to_string(&self) -> String {
-        hex::encode(&self.0)
     }
 }

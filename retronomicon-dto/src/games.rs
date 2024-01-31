@@ -36,6 +36,16 @@ pub struct GameListQueryParams<'v> {
     pub exact_name: Option<String>,
 }
 
+/// Parameters for filtering the list of game images.
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct GameImageListQueryParams {
+    /// Paging parameters.
+    #[serde(flatten)]
+    pub paging: PagingParams,
+}
+
 /// Parameters for filtering the list of games using checksums.
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]

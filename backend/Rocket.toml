@@ -9,6 +9,9 @@ root_team = [
 ]
 root_team_id = 1
 
+[default.databases.retronomicon_db]
+pool_size = 5
+
 [default.smtp]
 port = 587
 # The login info should be set through an environment variable.
@@ -20,9 +23,6 @@ email_verification_template = "../templates/email-verification.hbs"
 json = 25165824
 # 48 Megabytes
 file = 50331648
-
-[default.databases]
-# retronomicon_db is set automatically from the env variables.
 
 [default.oauth.github]
 provider = "GitHub"

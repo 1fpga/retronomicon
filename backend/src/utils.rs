@@ -15,7 +15,7 @@ pub mod json {
                 })
                 .collect::<Result<_, _>>()
         } else {
-            Err("links is not an object".to_string())
+            Err(format!("links value ({links}) is not an object"))
         }
     }
 

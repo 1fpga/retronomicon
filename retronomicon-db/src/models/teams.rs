@@ -79,6 +79,14 @@ impl Team {
         self.id == 1
     }
 
+    pub async fn get(db: &mut Db, id: i32) -> Result<Option<Self>, diesel::result::Error> {
+        schema::teams::table
+            .filter(schema::teams::id.eq(id))
+            .first::<Team>(db)
+            .await
+            .optional()
+    }
+
     pub async fn create(
         db: &mut Db,
         slug: &str,

@@ -83,6 +83,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    game_image_tags (game_image_id, tag_id) {
+        game_image_id -> Int4,
+        tag_id -> Int4,
+    }
+}
+
+diesel::table! {
+    game_images (id) {
+        id -> Int4,
+        game_id -> Int4,
+        #[max_length = 255]
+        image_name -> Varchar,
+        width -> Int4,
+        height -> Int4,
+        #[max_length = 255]
+        mime_type -> Varchar,
+    }
+}
+
+diesel::table! {
     games (id) {
         id -> Int4,
         #[max_length = 255]
@@ -241,6 +261,9 @@ diesel::joinable!(cores -> teams (owner_team_id));
 diesel::joinable!(files -> artifacts (id));
 diesel::joinable!(game_artifacts -> artifacts (artifact_id));
 diesel::joinable!(game_artifacts -> games (game_id));
+diesel::joinable!(game_image_tags -> game_images (game_image_id));
+diesel::joinable!(game_image_tags -> tags (tag_id));
+diesel::joinable!(game_images -> games (game_id));
 diesel::joinable!(games -> systems (system_id));
 diesel::joinable!(platform_tags -> platforms (platform_id));
 diesel::joinable!(platform_tags -> tags (tag_id));
@@ -261,6 +284,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     cores,
     files,
     game_artifacts,
+    game_image_tags,
+    game_images,
     games,
     platform_tags,
     platforms,

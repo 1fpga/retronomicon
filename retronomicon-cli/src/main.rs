@@ -834,7 +834,7 @@ async fn release(opts: &Opts, release_opts: &CoreReleaseOpts) -> Result<(), anyh
 
 async fn core(opts: &Opts, core_opts: &CoreOpts) -> Result<(), anyhow::Error> {
     match &core_opts.command {
-        CoreCommand::Releases(release_opts) => release(&opts, release_opts).await,
+        CoreCommand::Releases(release_opts) => release(opts, release_opts).await,
 
         CoreCommand::List(list_opts) => {
             output_json(client(opts).cores(&list_opts.paging).await?, opts)

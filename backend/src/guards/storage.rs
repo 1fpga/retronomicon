@@ -2,16 +2,39 @@ use reqwest::Url;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
+use s3::creds::error::CredentialsError;
 use s3::creds::Credentials;
 use s3::error::S3Error;
 use s3::Bucket;
 use s3::Region;
+use serde::Deserialize;
+use std::str::Utf8Error;
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 pub struct StorageConfig {
     pub region: String,
+    pub access_key: String,
+    pub secret_key: String,
     pub cores_bucket: String,
     pub cores_url_base: String,
+    pub images_bucket: String,
+    pub images_url_base: String,
+}
+
+impl StorageConfig {
+    pub fn credentials(&self) -> Result<Credentials, CredentialsError> {
+        Credentials::new(
+            Some(self.access_key.as_str()),
+            Some(self.secret_key.as_str()),
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn region(&self) -> Result<Region, Utf8Error> {
+        self.region.parse()
+    }
 }
 
 pub struct Storage {
@@ -25,14 +48,13 @@ impl<'a> FromRequest<'a> for Storage {
     async fn from_request(
         request: &'a rocket::Request<'_>,
     ) -> rocket::request::Outcome<Self, Self::Error> {
-        let config = match request.rocket().state::<StorageConfig>() {
-            Some(storage) => storage,
-            None => {
-                return Outcome::Error((
-                    Status::InternalServerError,
-                    "Storage not configured".to_string(),
-                ))
-            }
+        let config = match request
+            .rocket()
+            .figment()
+            .extract_inner::<StorageConfig>("s3")
+        {
+            Ok(storage) => storage,
+            Err(e) => return Outcome::Error((Status::InternalServerError, e.to_string())),
         };
 
         Outcome::Success(Self {
@@ -43,12 +65,8 @@ impl<'a> FromRequest<'a> for Storage {
 
 impl Storage {
     async fn bucket(&self, bucket_name: &str, public: bool) -> Result<Bucket, S3Error> {
-        let credentials = Credentials::default()?;
-        let region = Region::Custom {
-            region: "eu-central-1".to_owned(),
-            endpoint: self.config.region.clone(),
-        };
-
+        let credentials = self.config.credentials()?;
+        let region: Region = self.config.region()?;
         let mut bucket =
             Bucket::new(bucket_name, region.clone(), credentials.clone())?.with_path_style();
 
@@ -59,14 +77,16 @@ impl Storage {
         Ok(bucket)
     }
 
-    pub async fn upload_core(
+    async fn upload(
         &self,
+        bucket_name: &str,
+        public: bool,
         filename: &str,
         data: &[u8],
         content_type: &str,
-    ) -> Result<String, String> {
+    ) -> Result<(), String> {
         let bucket = self
-            .bucket(&self.config.cores_bucket, true)
+            .bucket(bucket_name, public)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -88,8 +108,43 @@ impl Storage {
                 response.status_code()
             ));
         }
+        Ok(())
+    }
 
+    pub async fn upload_core(
+        &self,
+        filename: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        self.upload(
+            &self.config.cores_bucket,
+            true,
+            filename,
+            data,
+            content_type,
+        )
+        .await?;
         let url = Url::parse(&format!("{}/{}", self.config.cores_url_base, filename)).unwrap();
+
+        Ok(url.to_string())
+    }
+
+    pub async fn upload_image(
+        &self,
+        filename: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<String, String> {
+        self.upload(
+            &self.config.images_bucket,
+            true,
+            filename,
+            data,
+            content_type,
+        )
+        .await?;
+        let url = Url::parse(&format!("{}/{}", self.config.images_url_base, filename)).unwrap();
 
         Ok(url.to_string())
     }

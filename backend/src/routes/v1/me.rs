@@ -1,5 +1,5 @@
+use crate::fairings::config::JwtKeys;
 use crate::guards::users::UserGuard;
-use crate::JwtKeys;
 use retronomicon_db::Db;
 use retronomicon_dto as dto;
 use rocket::http::{CookieJar, Status};

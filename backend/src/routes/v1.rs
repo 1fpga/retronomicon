@@ -1,14 +1,14 @@
 use rocket_okapi::openapi_get_routes;
 
-mod auth;
-mod cores;
-mod games;
-mod me;
-mod platforms;
-mod systems;
-mod tags;
-mod teams;
-mod users;
+pub mod auth;
+pub mod cores;
+pub mod games;
+pub mod me;
+pub mod platforms;
+pub mod systems;
+pub mod tags;
+pub mod teams;
+pub mod users;
 
 pub fn routes() -> Vec<rocket::Route> {
     openapi_get_routes![
@@ -30,6 +30,8 @@ pub fn routes() -> Vec<rocket::Route> {
         games::games_add_artifact,
         games::games_create,
         games::games_details,
+        games::games_images,
+        games::games_images_upload,
         games::games_list,
         games::games_update,
         me::me,

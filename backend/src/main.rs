@@ -1,57 +1,30 @@
-use crate::guards::emailer::SmtpConfig;
+use crate::fairings::config::{DbPepper, JwtKeys, RetronomiconConfig};
 use crate::routes::v1;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use clap::Parser;
 use retronomicon_db::{run_migrations, RetronomiconDbPool};
-use rocket::figment::providers::Env;
-use rocket::figment::value::{Map, Value};
-use rocket::figment::{map, Provider};
+use rocket::fairing::AdHoc;
+use rocket::fs::relative;
 use rocket::response::status::NoContent;
 use rocket::{get, http::Status, routes};
 use rocket_oauth2::OAuth2;
 use rocket_okapi::rapidoc::{make_rapidoc, GeneralConfig, HideShowConfig, RapiDocConfig};
 use rocket_okapi::settings::UrlObject;
 use rocket_okapi::swagger_ui::{make_swagger_ui, SwaggerUIConfig};
-use std::collections::BTreeMap;
 use std::env;
 use std::path::PathBuf;
 
+mod config;
 mod fairings;
 mod guards;
 
 mod routes;
 mod utils;
 
-#[derive(Debug, serde::Deserialize)]
-pub struct RetronomiconConfig {
-    pub base_url: String,
-    pub root_team: Vec<String>,
-    pub root_team_id: i32,
-
-    pub smtp: SmtpConfig,
-}
-
-pub struct JwtKeys {
-    pub encoding: EncodingKey,
-    pub decoding: DecodingKey,
-}
-
-impl JwtKeys {
-    pub fn from_base64(secret: &str) -> Self {
-        let secret = STANDARD.decode(secret).expect("Invalid base64 JWT secret");
-        let encoding = EncodingKey::from_secret(&secret);
-        let decoding = DecodingKey::from_secret(&secret);
-        Self { encoding, decoding }
-    }
-}
-
-pub struct DbPepper(pub Vec<u8>);
-
-impl DbPepper {
-    pub fn from_base64(secret: &str) -> Self {
-        let secret = STANDARD.decode(secret).expect("Invalid base64 pepper");
-        Self(secret)
-    }
+#[derive(Debug, Parser)]
+struct Opts {
+    /// Additional configuration files for Rocket (in toml).
+    #[clap(long)]
+    rocket: Vec<PathBuf>,
 }
 
 #[get("/healthz")]
@@ -59,87 +32,47 @@ async fn health_handler() -> Result<NoContent, Status> {
     Ok(NoContent)
 }
 
-fn database_config() -> impl Provider {
-    let db_url = Some(Value::from(
-        env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
-    ));
-    let pool_size = env::var("DATABASE_POOL_SIZE")
-        .ok()
-        .and_then(|s| s.parse::<u32>().ok())
-        .map(Value::from);
-    let certs_files: Option<Value> = env::var("DATABASE_CERTS")
-        .ok()
-        .map(|e| Value::from(e.split(';').map(|c| Value::from(c)).collect::<Vec<_>>()));
-
-    let db: Map<_, Option<Value>> = map! {
-        "url" => db_url.into(),
-        "pool_size" => pool_size,
-        "certs" => certs_files.into(),
-    };
-
-    ("databases", map!["retronomicon_db" => db])
-}
-
-fn oauth_config() -> impl Provider {
-    let mut oauth = BTreeMap::new();
-    for (k, v) in env::vars() {
-        if k.starts_with("ROCKET_OAUTH_") {
-            let mut parts = k.splitn(4, '_');
-            parts.next();
-            parts.next();
-
-            let provider = parts.next().unwrap();
-            let key = parts.next().unwrap();
-            let value = oauth
-                .entry(provider.to_lowercase())
-                .or_insert_with(BTreeMap::<String, String>::new);
-            value.insert(key.to_lowercase(), v);
-        }
-    }
-
-    ("oauth", oauth)
-}
-
 #[rocket::launch]
 async fn rocket() -> _ {
-    // The order is first, local environment variables, then global ones, then
-    // only use development if in debug mode.
-    dotenvy::from_filename(".env.local").ok();
-    dotenvy::dotenv().ok();
+    let opts = Opts::parse();
+    rocket::info!("Opts: {:?}", opts);
 
-    #[cfg(debug_assertions)]
-    dotenvy::from_filename(".env.development").ok();
+    let figment = config::create_figment(&opts.rocket, "debug").unwrap();
 
-    run_migrations();
-
-    let figment = rocket::Config::figment()
-        .merge(database_config())
-        .merge(oauth_config())
-        .merge(Env::prefixed("APP_").split("_"));
+    run_migrations(
+        figment
+            .find_value("databases.retronomicon_db.url")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+    );
 
     let secret_key = figment
         .find_value("secret_key")
         .expect("No secret key.")
         .into_string()
         .unwrap();
-    let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| secret_key.clone());
-    let db_pepper = env::var("DATABASE_PEPPER").unwrap_or_else(|_| secret_key.clone());
 
-    let static_root = figment
-        .find_value("static_root")
+    let jwt_secret_b64 = figment
+        .extract_inner::<String>("jwt_secret")
+        .or_else(|_| env::var("JWT_SECRET"))
+        .unwrap_or_else(|_| secret_key.clone());
+    let db_pepper = figment
+        .extract_inner::<String>("db_pepper")
+        .or_else(|_| env::var("DATABASE_PEPPER"))
+        .unwrap_or_else(|_| secret_key.clone());
+
+    let static_root: Option<String> = figment
+        .extract_inner("static_root")
         .ok()
-        .and_then(|v| v.into_string())
-        .unwrap_or_else(|| {
-            env::var("STATIC_ROOT").ok().unwrap_or_else(|| {
-                env::current_exe()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .join("static")
-                    .to_string_lossy()
-                    .to_string()
-            })
-        });
+        .or_else(|| env::var("STATIC_ROOT").ok());
+
+    #[cfg(debug_assertions)]
+    let static_root = static_root.or_else(|| Some(relative!("../frontend/build").to_string()));
+
+    if static_root.is_none() {
+        rocket::warn!("No static root set, serving no static files.");
+    }
 
     let prometheus = rocket_prometheus::PrometheusMetrics::new();
 
@@ -174,7 +107,10 @@ async fn rocket() -> _ {
         .mount("/metrics", prometheus.clone())
         .mount(
             "/",
-            rocket::fs::FileServer::from(PathBuf::from(static_root)),
+            rocket::fs::FileServer::new(
+                static_root.unwrap_or_else(|| "/dev/null".to_string()),
+                rocket::fs::Options::Index | rocket::fs::Options::Missing,
+            ),
         )
         .attach(RetronomiconDbPool::init())
         .attach(prometheus)
@@ -182,13 +118,7 @@ async fn rocket() -> _ {
         .attach(OAuth2::<routes::auth::GoogleUserInfo>::fairing("google"))
         .attach(OAuth2::<routes::auth::PatreonUserInfo>::fairing("patreon"))
         .attach(fairings::cors::Cors)
-        .manage(JwtKeys::from_base64(&jwt_secret))
+        .manage(JwtKeys::from_base64(&jwt_secret_b64))
         .manage(DbPepper::from_base64(&db_pepper))
-        .manage(guards::storage::StorageConfig {
-            region: env::var("AWS_REGION").expect("AWS_REGION environment variable must be set"),
-            cores_bucket: env::var("AWS_CORES_BUCKET").unwrap_or("retronomicon-cores".to_string()),
-            cores_url_base: env::var("AWS_CORES_URL_BASE")
-                .unwrap_or("https://cores.retronomicon.land".to_string()),
-        })
-        .attach(rocket::fairing::AdHoc::config::<RetronomiconConfig>())
+        .attach(AdHoc::config::<RetronomiconConfig>())
 }

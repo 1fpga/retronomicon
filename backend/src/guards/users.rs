@@ -1,4 +1,4 @@
-use crate::JwtKeys;
+use crate::fairings::config::{JwtKeys, RetronomiconConfig};
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use retronomicon_db::models::{User, UserTeam};
 use retronomicon_db::Db;
@@ -22,6 +22,11 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
     type Error = String;
 
     async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+        let config = request
+            .rocket()
+            .state::<RetronomiconConfig>()
+            .expect("No retronomicon config");
+
         let mut db = request
             .guard::<Db>()
             .await
@@ -32,11 +37,14 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
             Outcome::Error((status, _)) => return Outcome::Error((status, "Unauthorized".into())),
         };
 
-        UserTeam::user_is_in_team(&mut db, user.id, 1)
+        let result = UserTeam::user_is_in_team(&mut db, user.id, config.root_team_id)
             .await
-            .map_err(|e| e.to_string())
-            .or_error(Status::Unauthorized)
-            .map(|_| RootUserGuard { id: user.id })
+            .map_err(|e| e.to_string());
+        match result {
+            Ok(true) => Outcome::Success(RootUserGuard { id: user.id }),
+            Ok(false) => Outcome::Forward(Status::Unauthorized),
+            Err(e) => Outcome::Error((Status::InternalServerError, e)),
+        }
     }
 }
 
@@ -98,10 +106,10 @@ impl AuthenticatedUserGuard {
         self.inner
     }
 
-    pub fn username(&self) -> &str {
-        // This is guaranteed to be Some because of the `into()` implementation.
-        self.inner.username.as_ref().unwrap()
-    }
+    // pub fn username(&self) -> &str {
+    //     // This is guaranteed to be Some because of the `into()` implementation.
+    //     self.inner.username.as_ref().unwrap_or_else("")
+    // }
 
     pub async fn into_model(self, db: &mut Db) -> Result<User, (Status, String)> {
         self.inner.into_model(db).await
@@ -323,7 +331,7 @@ impl UserGuard {
         jsonwebtoken::encode(
             &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS512),
             &self,
-            &key,
+            key,
         )
     }
 

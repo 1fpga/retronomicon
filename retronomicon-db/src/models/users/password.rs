@@ -175,7 +175,6 @@ fn can_hash_password() {
     let password = "password";
     let pepper = "pepper";
     let password_hash = DbPassword::create(pepper.as_bytes(), password).unwrap();
-    eprintln!("password_hash: {}", password_hash.0);
     assert!(password_hash.verify(pepper.as_bytes(), password).unwrap());
     assert!(!password_hash.verify(pepper.as_bytes(), "wrong").unwrap());
 }

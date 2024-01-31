@@ -23,7 +23,7 @@ fn establish_connection<'a>(
             .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("Database connection: {e}");
+                rocket::error!("Database connection error: {e}");
             }
         });
         AsyncPgConnection::try_from(client).await

@@ -29,10 +29,11 @@ impl<'v> Username<'v> {
         }
 
         // Validate against the regex `^[a-z_]([a-z0-9_.-]*[a-z0-9_])?$`
-        for ch in username[1..username.len() - 1].chars() {
-            if !matches!(ch, 'a'..='z' | '0'..='9' | '_' | '.' | '-') {
-                return Err("Username must contain only lowercase letters, numbers, underscores, dots and dashes");
-            }
+        if username[1..username.len() - 1]
+            .chars()
+            .any(|ch| !matches!(ch, 'a'..='z' | '0'..='9' | '_' | '.' | '-'))
+        {
+            return Err("Username must contain only lowercase letters, numbers, underscores, dots and dashes");
         }
         if !username.ends_with(|c| matches!(c, 'a'..='z' | '0'..='9' | '_')) {
             return Err("Username must end with a lowercase letter, number or underscore");

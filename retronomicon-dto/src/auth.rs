@@ -12,6 +12,7 @@ pub struct SignupRequest<'a> {
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SignupResponse {
+    pub id: i32,
     pub email: String,
 }
 
