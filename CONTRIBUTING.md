@@ -123,12 +123,12 @@ export ROCKET_SECRET_KEY="dH+kbvuRgr6z/OQaycGZEjMFKRFnhBlJJha9CYnWCNNpnsGHSGcOb+
 
 # This will add additional users to the root team.
 # This has to be an array of strings. Any wildcard (*, ?) will be interpreted.
-export ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM='[]'
+export ROCKET_ROOT_TEAM='["*@admin"]'
 
 # Get the IP address of the containers above.
 # Change this to your IP address if you're not using Docker.
 export ROCKET_DATABASES__RETRONOMICON_DB__URL="postgres://local_user:mysecretpassword@$(docker inspect pgsql-dev | jq -r '.[0].NetworkSettings.IPAddress'):5432/local_retronomicon"
-export ROCKET_S3__REGION="$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
+export ROCKET_S3__REGION="http://$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
 
 # If you just want to run Retronomicon locally without your own frontend, you
 # can use `http://localhost:8000` instead.
@@ -139,7 +139,7 @@ docker run -it --rm \
     -e ROCKET_S3__ACCESS_KEY \
     -e ROCKET_S3__SECRET_KEY \
     -e ROCKET_S3__REGION \
-    -e ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM \
+    -e ROCKET_ROOT_TEAM \
     -e ROCKET_DATABASES__RETRONOMICON_DB__URL \
     -e ROCKET_BASE_URL \
     -p 127.0.0.1:8000:8000 \

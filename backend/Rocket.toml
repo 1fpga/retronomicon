@@ -9,22 +9,18 @@ root_team = [
 ]
 root_team_id = 1
 
+# Create users without sending and validating their email.
+bypass_email_validation = []
+
 # This is used in docker and in production.
 # This directory can be overloaded in the Rocket.debug.toml file for local
 # development.
 template_dir = "/app/templates"
 
-[default.debug]
-# Those are not necessary for non-debug builds, but by default should be empty.
-# Running in docker or in production will ignore these settings.
-# They are used in debug or testing environments to set root team members and
-# remove email validation.
-
-# Add additional root teams to the database.
-additional_root_team = []
-
-# Create users without sending and validating their email.
-bypass_email_validation = []
+[default.s3]
+cores_bucket = "retronomicon-cores"
+games_bucket = "retronomicon-games"
+users_bucket = "retronomicon-users"
 
 [default.databases.retronomicon_db]
 pool_size = 5

@@ -2888,6 +2888,7 @@ dependencies = [
  "clap-verbosity-flag",
  "datary",
  "hex",
+ "image",
  "mime_guess2",
  "oauth2",
  "reqwest",

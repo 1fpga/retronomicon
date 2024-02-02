@@ -18,6 +18,24 @@ use tracing::{debug, info, Level};
 use tracing_subscriber::fmt::Subscriber;
 use url::Url;
 
+trait Prompter {
+    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error>;
+}
+
+impl Prompter for Option<String> {
+    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error> {
+        match self {
+            Some(x) => Ok(x.clone()),
+            None => {
+                std::io::stderr().write_all(prompt.as_bytes()).unwrap();
+                let mut value = String::new();
+                std::io::stdin().read_line(&mut value)?;
+                Ok(value)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 struct Opts {
     #[command(subcommand)]
@@ -262,6 +280,7 @@ pub enum GamesCommand {
     // Update(GameUpdateOpts),
     AddArtifact(GameAddArtifactOpts),
     UpdateFromDat(GameUpdateFromDatOpts),
+    AddImage(GameAddImageOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -415,6 +434,15 @@ impl GameAddArtifactOpts {
             sha256: self.sha256.clone(),
         }
     }
+}
+
+#[derive(Debug, Parser)]
+pub struct GameAddImageOpts {
+    /// The game's unique id.
+    game: i32,
+
+    /// The image's path.
+    path: PathBuf,
 }
 
 #[derive(Debug, Parser)]
@@ -1126,23 +1154,14 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), Error> {
             }
             Ok(())
         }
-    }
-}
+        GamesCommand::AddImage(GameAddImageOpts { game, path }) => {
+            let client = client(opts);
 
-trait Prompter {
-    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error>;
-}
-
-impl Prompter for Option<String> {
-    fn or_prompt(&self, prompt: &str) -> Result<String, std::io::Error> {
-        match self {
-            Some(x) => Ok(x.clone()),
-            None => {
-                std::io::stderr().write_all(prompt.as_bytes()).unwrap();
-                let mut value = String::new();
-                std::io::stdin().read_line(&mut value)?;
-                Ok(value)
-            }
+            // Make sure the game exists.
+            let _ = client.games_details(*game).await?;
+            let _image = image::open(path)?;
+            client.games_add_image(*game, path).await?;
+            Ok(())
         }
     }
 }

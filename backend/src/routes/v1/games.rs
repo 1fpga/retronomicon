@@ -239,7 +239,7 @@ pub async fn games_images(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .into_iter()
         .map(|(i, _)| {
-            let url = format!("/images/games/{}/{}", game_id, i.image_name);
+            let url = &format!("{}/games/{}/images/{}", game_id, i.image_name);
             dto::images::Image {
                 name: i.image_name,
                 url,
@@ -256,7 +256,7 @@ pub async fn games_images(
 /// The upload will be refused if the user does not have permission to
 /// upload images to this game.
 #[openapi(tag = "Games", ignore = "config", ignore = "db", ignore = "storage")]
-#[post("/cores/<game_id>/images", data = "<file>")]
+#[post("/games/<game_id>/images", data = "<file>")]
 pub async fn games_images_upload(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,
@@ -339,8 +339,8 @@ pub async fn games_images_upload(
             }
 
             storage
-                .upload_image(
-                    &format!("games/{}/{}", game_id, filename),
+                .upload_game_asset(
+                    &format!("games/{}/images/{}", game_id, filename),
                     image.as_bytes(),
                     mimetype.essence_str(),
                 )

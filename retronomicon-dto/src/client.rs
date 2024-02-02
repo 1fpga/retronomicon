@@ -119,6 +119,14 @@ macro_rules! declare_client_impl {
                 ("games/{id}/artifacts", id: i32),
                 @body body: &Vec<crate::games::GameAddArtifactRequest<'_>>,
             ) -> crate::Ok;
+            get games_images(
+                ("games/{id}/images", id: i32),
+                @query paging: &crate::params::PagingParams,
+            ) -> Vec<crate::images::Image>;
+            post games_add_image(
+                ("games/{id}/images", id: i32),
+                @file file,
+            ) -> crate::Ok;
         }
     };
 }
@@ -314,17 +322,19 @@ pub mod v1 {
 
     impl V1Client {
         fn client(auth_token: Option<&str>) -> Result<reqwest::Client, reqwest::Error> {
-            let mut headers = header::HeaderMap::new();
             if let Some(token) = auth_token {
+                let mut headers = header::HeaderMap::new();
                 let mut auth_value =
                     header::HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
                 auth_value.set_sensitive(true);
                 headers.insert(header::AUTHORIZATION, auth_value);
+
+                Client::builder().default_headers(headers)
+            } else {
+                Client::builder()
             }
-
-            let client = Client::builder().default_headers(headers);
-
-            client.build()
+            .cookie_store(true)
+            .build()
         }
 
         pub fn new(ClientConfig { url_base, token }: ClientConfig) -> Result<Self, String> {
@@ -346,7 +356,9 @@ pub mod v1 {
                 headers.insert(header::AUTHORIZATION, auth_value);
             }
 
-            let client = reqwest::blocking::Client::builder().default_headers(headers);
+            let client = reqwest::blocking::Client::builder()
+                .cookie_store(true)
+                .default_headers(headers);
 
             client.build()
         }

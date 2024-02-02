@@ -12,13 +12,20 @@ use std::str::Utf8Error;
 
 #[derive(Clone, Deserialize)]
 pub struct StorageConfig {
-    pub region: String,
-    pub access_key: String,
-    pub secret_key: String,
-    pub cores_bucket: String,
-    pub cores_url_base: String,
-    pub images_bucket: String,
-    pub images_url_base: String,
+    region: String,
+    /// The base URL for the S3 bucket. This is used to construct the URL for the uploaded file.
+    /// If this is not set, and the *_url_base fields are not set, the server will panic when
+    /// using any storage functionality.
+    url_base: Option<String>,
+
+    access_key: String,
+    secret_key: String,
+
+    cores_bucket: String,
+    cores_url_base: Option<String>,
+
+    games_bucket: String,
+    games_url_base: Option<String>,
 }
 
 impl StorageConfig {
@@ -33,7 +40,28 @@ impl StorageConfig {
     }
 
     pub fn region(&self) -> Result<Region, Utf8Error> {
-        self.region.parse()
+        Ok(Region::Custom {
+            region: "eu-central-1".to_owned(),
+            endpoint: self.region.clone(),
+        })
+    }
+
+    pub fn url_base(&self) -> Result<&str, String> {
+        self.url_base
+            .as_deref()
+            .ok_or_else(|| "No URL base set for storage".to_string())
+    }
+
+    pub fn cores_url_base(&self) -> &str {
+        self.cores_url_base
+            .as_deref()
+            .unwrap_or_else(|| self.url_base().expect("No URL base set for S3 cores"))
+    }
+
+    pub fn games_url_base(&self) -> &str {
+        self.games_url_base
+            .as_deref()
+            .unwrap_or_else(|| self.url_base().expect("No URL base set for S3 cores"))
     }
 }
 
@@ -118,34 +146,39 @@ impl Storage {
         content_type: &str,
     ) -> Result<String, String> {
         self.upload(
-            &self.config.cores_bucket,
+            self.config.cores_bucket.as_str(),
             true,
             filename,
             data,
             content_type,
         )
         .await?;
-        let url = Url::parse(&format!("{}/{}", self.config.cores_url_base, filename)).unwrap();
+        let url = Url::parse(&format!("{}/{}", self.config.cores_url_base(), filename)).unwrap();
 
         Ok(url.to_string())
     }
 
-    pub async fn upload_image(
+    pub async fn upload_game_asset(
         &self,
         filename: &str,
         data: &[u8],
         content_type: &str,
     ) -> Result<String, String> {
         self.upload(
-            &self.config.images_bucket,
+            self.config.games_bucket.as_str(),
             true,
             filename,
             data,
             content_type,
         )
         .await?;
-        let url = Url::parse(&format!("{}/{}", self.config.images_url_base, filename)).unwrap();
+        let url = Url::parse(&format!("{}/{}", self.config.games_url_base(), filename)).unwrap();
 
+        Ok(url.to_string())
+    }
+
+    pub fn url_game_asset(&self, filename: &str) -> Result<String, String> {
+        let url = Url::parse(&format!("{}/{}", self.config.games_url_base(), filename)).unwrap();
         Ok(url.to_string())
     }
 }

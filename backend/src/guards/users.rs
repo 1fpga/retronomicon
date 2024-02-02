@@ -106,11 +106,6 @@ impl AuthenticatedUserGuard {
         self.inner
     }
 
-    // pub fn username(&self) -> &str {
-    //     // This is guaranteed to be Some because of the `into()` implementation.
-    //     self.inner.username.as_ref().unwrap_or_else("")
-    // }
-
     pub async fn into_model(self, db: &mut Db) -> Result<User, (Status, String)> {
         self.inner.into_model(db).await
     }

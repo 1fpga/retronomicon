@@ -8,9 +8,10 @@ db_pepper = ""
 
 template_dir = "templates"
 
-[debug]
-additional_root_team = []
-bypass_email_validation = ["*"]
+# In debug, allows anyone from the admin domain to be used as admin.
+root_team = ["*@admin"]
+# Also bypass validation for those, as the domain does not exist.
+bypass_email_validation = ["*@admin"]
 
 [s3]
 region = "http://localhost:9000"

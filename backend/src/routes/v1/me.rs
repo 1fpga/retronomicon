@@ -8,7 +8,7 @@ use rocket::{get, post, put, State};
 use rocket_okapi::openapi;
 
 #[openapi(tag = "Users", ignore = "db")]
-#[put("/me/update", format = "application/json", data = "<form>")]
+#[put("/me", rank = 1, format = "application/json", data = "<form>")]
 pub async fn me_update(
     mut db: Db,
     cookies: &CookieJar<'_>,
