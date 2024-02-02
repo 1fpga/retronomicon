@@ -149,6 +149,49 @@ impl<'v> rocket::request::FromParam<'v> for UserIdOrUsername<'v> {
     }
 }
 
+#[cfg(feature = "rocket")]
+impl<'v, T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::UriDisplay<T>
+    for UserIdOrUsername<'v>
+{
+    fn fmt(&self, f: &mut rocket::http::uri::fmt::Formatter<'_, T>) -> std::fmt::Result {
+        use std::fmt::Write;
+        f.write_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<'v, T: rocket::http::uri::fmt::Part>
+    rocket::http::uri::fmt::FromUriParam<T, UserIdOrUsername<'v>> for UserIdOrUsername<'v>
+{
+    type Target = UserIdOrUsername<'v>;
+
+    fn from_uri_param(param: UserIdOrUsername<'v>) -> Self::Target {
+        param
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<'v, T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::FromUriParam<T, &'v str>
+    for UserIdOrUsername<'static>
+{
+    type Target = UserIdOrUsername<'static>;
+
+    fn from_uri_param(param: &'v str) -> Self::Target {
+        Self::from_str(param).expect("Invalid Username")
+    }
+}
+
+#[cfg(feature = "rocket")]
+impl<T: rocket::http::uri::fmt::Part> rocket::http::uri::fmt::FromUriParam<T, i32>
+    for UserIdOrUsername<'static>
+{
+    type Target = UserIdOrUsername<'static>;
+
+    fn from_uri_param(param: i32) -> Self::Target {
+        UserIdOrUsername::Id(param)
+    }
+}
+
 /// Response when asking for the availability of a username.
 #[derive(Default, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
@@ -181,7 +224,8 @@ pub struct UserRef {
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct UserDetailsInner {
     pub id: i32,
-    pub username: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     pub description: String,
     pub links: Value,
     pub metadata: Value,

@@ -3,7 +3,6 @@ use crate::routes::v1;
 use clap::Parser;
 use retronomicon_db::{run_migrations, RetronomiconDbPool};
 use rocket::fairing::AdHoc;
-use rocket::fs::relative;
 use rocket::response::status::NoContent;
 use rocket::{get, http::Status, routes};
 use rocket_oauth2::OAuth2;
@@ -68,7 +67,8 @@ async fn rocket() -> _ {
         .or_else(|| env::var("STATIC_ROOT").ok());
 
     #[cfg(debug_assertions)]
-    let static_root = static_root.or_else(|| Some(relative!("../frontend/build").to_string()));
+    let static_root =
+        static_root.or_else(|| Some(rocket::fs::relative!("../frontend/build").to_string()));
 
     if static_root.is_none() {
         rocket::warn!("No static root set, serving no static files.");

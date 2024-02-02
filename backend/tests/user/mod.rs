@@ -4,6 +4,7 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use retronomicon_dto as dto;
 use retronomicon_dto::types::IdOrSlug;
+use retronomicon_dto::user::UserIdOrUsername;
 use rocket::http::uri::Origin;
 use rocket::http::{Cookie, Method, Status};
 use rocket::local::asynchronous::Client;
@@ -378,5 +379,15 @@ impl User {
     pub async fn get_game_by_id(&mut self, game_id: i32) -> Result<dto::games::GameDetails, Error> {
         self.get(uri!(v1::games::games_details(game_id as u32)), &())
             .await
+    }
+
+    pub async fn get_user_details(
+        &mut self,
+        user: Option<UserIdOrUsername<'_>>,
+    ) -> Result<dto::user::UserDetails, Error> {
+        match user {
+            Some(user) => self.get(uri!(v1::users::users_details(user)), &()).await,
+            None => self.whoami().await,
+        }
     }
 }

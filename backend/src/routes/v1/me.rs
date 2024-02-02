@@ -26,7 +26,7 @@ pub async fn me_update(
     user.update(&mut db, form.into_inner()).await?;
 
     // At this point, because of the unique constraint on username, we know
-    // that the username is set.
+    // that the username is set. Update the cookie which contains the username.
     user.username = username.map(Into::into);
     user.update_cookie(cookies);
 
@@ -36,7 +36,8 @@ pub async fn me_update(
 #[openapi(tag = "Users", ignore = "db")]
 #[get("/me")]
 pub async fn me(db: Db, user: UserGuard) -> Result<Json<dto::user::UserDetails>, (Status, String)> {
-    crate::routes::v1::users::users_details(db, user.id.into()).await
+    let id = user.id;
+    crate::routes::v1::users::users_details(db, user, id.into()).await
 }
 
 /// Create a JWT token for the current logged-in user.

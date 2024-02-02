@@ -24,8 +24,6 @@ pub struct SmtpConfig {
     pub password: Option<String>,
 
     pub from: String,
-
-    pub email_verification_template: String,
 }
 
 pub struct EmailGuard {
@@ -38,37 +36,28 @@ impl<'r> FromRequest<'r> for EmailGuard {
     type Error = String;
 
     async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
-        let config = request
-            .guard::<&rocket::State<RetronomiconConfig>>()
-            .await
-            .unwrap()
-            .smtp
-            .clone();
-
-        let template = match std::fs::read_to_string(&config.email_verification_template) {
-            Ok(template) => template,
-            Err(err) => {
-                error!("Failed to read email verification template: {:?}", err);
-                return Outcome::Error((
-                    Status::InternalServerError,
-                    "Failed to read email verification template".to_string(),
-                ));
-            }
+        let config = match request.rocket().state::<RetronomiconConfig>() {
+            Some(c) => c,
+            None => return Outcome::Error((Status::InternalServerError, "No config".to_string())),
         };
+        let smtp_config = config.smtp.clone();
 
-        Outcome::Success(Self { config, template })
+        let template = config.templates().email_verification();
+
+        Outcome::Success(Self {
+            config: smtp_config,
+            template,
+        })
     }
 }
 
 impl EmailGuard {
     pub fn send_email_verification(&self, email: &str, url: &str) -> Result<(), (Status, String)> {
-        rocket::info!("Url to validate email: {}", url);
-
-        rocket::info!("config: {:#?}", self.config);
         let server_url = match self.config.server.as_ref() {
             Some(api_key) => api_key,
             None => {
                 rocket::warn!("No SMTP server set, not sending email");
+                rocket::warn!("Url to validate email: {}", url);
                 return Ok(());
             }
         };

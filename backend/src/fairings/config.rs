@@ -1,3 +1,4 @@
+use crate::fairings::template::TemplateResolver;
 use crate::guards::emailer::SmtpConfig;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -16,7 +17,10 @@ pub struct RetronomiconConfig {
     pub root_team: Vec<String>,
     pub root_team_id: i32,
 
+    #[cfg(debug_assertions)]
     debug: Option<DebugConfig>,
+
+    template_dir: String,
 
     pub smtp: SmtpConfig,
 }
@@ -33,6 +37,11 @@ impl RetronomiconConfig {
         {
             None
         }
+    }
+
+    #[must_use]
+    pub fn templates(&self) -> TemplateResolver {
+        TemplateResolver::new(&self.template_dir)
     }
 
     pub(crate) fn bypass_email_validation(&self, email: &str) -> bool {

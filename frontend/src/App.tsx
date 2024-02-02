@@ -65,7 +65,7 @@ function App() {
     const data = new FormData(event.currentTarget);
     const email = data.get("email") as string;
     const password = data.get("password") as string;
-    axios.post(process.env.REACT_APP_BACKEND_URL + "/v1/signup", {email, password})
+    axios.post(process.env.REACT_APP_BACKEND_URL + "/signup", {email, password})
         .then((res) => getUser())
         .catch((err) => alert(err.response?.data?.message || err.message));
   }

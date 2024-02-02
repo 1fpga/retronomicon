@@ -87,8 +87,8 @@ Go to the `Access Keys` tab and click on `Create access key` button in the top r
 Make sure to copy the access key and secret key, as you will need them later.
 You can also download the keys as a JSON file, and run the following commands to extract the keys:
 ```bash
-export AWS_ACCESS_KEY_ID=$(cat Credentials.json | jq -r '.accessKey')
-export AWS_SECRET_ACCESS_KEY=$(cat Credentials.json | jq -r '.secretKey')
+export ROCKET_S3__ACCESS_KEY=$(cat credentials.json | jq -r '.accessKey')
+export ROCKET_S3__SECRET_KEY=$(cat credentials.json | jq -r '.secretKey')
 ```
 
 Don't worry too much about the keys and/or policies, as the MinIO instance is only accessible from your computer.
@@ -99,7 +99,7 @@ You can use `cargo` if you're developing for the backend.
 If not, I would suggest using Docker to build and run the backend.
 To build the Docker images, run the following command:
 ```bash
-docker build -t retronomicon-backend
+docker build -t retronomicon-backend .
 ```
 
 This will create a Docker image named `retronomicon-backend` that contains the backend.
@@ -108,46 +108,43 @@ Run it with the following command (assuming you created the database and MinIO c
 > [!IMPORTANT]
 > The access keys for AWS must be changed to the right values generated above in the "Configuring the MinIO instance" section.
 
-> [!IMPORTANT]
-> If you don't configure an OAUTH client, you won't be able to login to the backend (yet).
-> Creating users is not implemented yet.
-> I suggest using GitHub as an OAUTH provider, as it's the easiest to setup.
-> For more information, see [Configuring OAUTH on GitHub](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authenticating-to-the-rest-api-with-an-oauth-app).
+> [!NOTE]
+> Environment variables prefixed with `ROCKET_` will supersede configuration values in `Rocket.toml`.
+> Their name is namespaced by `__` (double underscore) instead of `.` (dot) to avoid issues with environment variables on some platforms.
+> For example, the `ROCKET_S3__ACCESS_KEY` environment variable will override the `s3.access_key` value in `Rocket.toml`.
 
 ```bash
-export AWS_ACCESS_KEY_ID="THE ACCESS KEY GENERATED ABOVE"
-export AWS_SECRET_ACCESS_KEY="THE SECRET KEY GENERATED ABOVE"
-
-export ROCKET_OAUTH_GITHUB_CLIENT_ID="YOUR GITHUB CLIENT ID"
-export ROCKET_OAUTH_GITHUB_CLIENT_SECRET="YOUR GITHUB CLIENT SECRET"
+export ROCKET_S3__ACCESS_KEY="THE ACCESS KEY GENERATED ABOVE"
+export ROCKET_S3__SECRET_KEY="THE SECRET KEY GENERATED ABOVE"
+# This key needs to be the same between restarts of the server.
+# When running locally this is set to a static value in `Rocket.debug.toml`,
+# But that file is not used in docker.
+export ROCKET_SECRET_KEY="dH+kbvuRgr6z/OQaycGZEjMFKRFnhBlJJha9CYnWCNNpnsGHSGcOb+HZsmwLGoOf84Xz5d1EGMT/1EnVJxoDFw=="
 
 # This will add additional users to the root team.
-export ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL="ANY EMAIL YOU WANT AS ROOT USER"
+# This has to be an array of strings. Any wildcard (*, ?) will be interpreted.
+export ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM='[]'
 
 # Get the IP address of the containers above.
 # Change this to your IP address if you're not using Docker.
-export DATABASE_URL="postgres://local_user:mysecretpassword@$(docker inspect pgsql-dev | jq -r '.[0].NetworkSettings.IPAddress'):5432/local_retronomicon"
-export AWS_REGION="$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
+export ROCKET_DATABASES__RETRONOMICON_DB__URL="postgres://local_user:mysecretpassword@$(docker inspect pgsql-dev | jq -r '.[0].NetworkSettings.IPAddress'):5432/local_retronomicon"
+export ROCKET_S3__REGION="$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
+
+# If you just want to run Retronomicon locally without your own frontend, you
+# can use `http://localhost:8000` instead.
+export ROCKET_BASE_URL="http://localhost:3000/"
 
 docker run -it --rm \
-    -e ROCKET_SECRET_KEY=(openssl rand -base64 64 | tr -d '\n') \
-    -e DATABASE_URL=$DATABASE_URL \
-    -e AWS_REGION=$AWS_REGION \
-    -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-    -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
-    -e ROCKET_OAUTH_GITHUB_CLIENT_ID=$ROCKET_OAUTH_GITHUB_CLIENT_ID \
-    -e ROCKET_OAUTH_GITHUB_CLIENT_SECRET=$ROCKET_OAUTH_GITHUB_CLIENT_SECRET \
-    -e ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL=$ROCKET_DEBUG_ROOT_ADDITIONAL_EMAIL \
-    -e RUST_BACKTRACE=1 \
-    -e ROCKET_BASE_URL=http://localhost:3000/ \
+    -e ROCKET_SECRET_KEY \
+    -e ROCKET_S3__ACCESS_KEY \
+    -e ROCKET_S3__SECRET_KEY \
+    -e ROCKET_S3__REGION \
+    -e ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM \
+    -e ROCKET_DATABASES__RETRONOMICON_DB__URL \
+    -e ROCKET_BASE_URL \
     -p 127.0.0.1:8000:8000 \
     retronomicon-backend
 ```
-
-> [!NOTE]
-> The `ROCKET_SECRET_KEY` environment variable is used to encrypt the session cookies.
-> It is generated randomly in the command above, but you can set it to any value you want.
-> If you keep that value random, you will need to set it again if you restart the container, and cookies are going to be invalidated on restart.
 
 ## Developing for the Backend
 
@@ -165,27 +162,10 @@ npm run -w frontend build
 The output will be in the `frontend/build` directory.
 Make sure to have a STATIC_ROOT environment variable pointing to that directory when running the backend.
 
-### Environment variables
-The backend uses the following environment variables:
-- `ROCKET_SECRET_KEY`:
-  The secret key used to encrypt session cookies.
-- `DATABASE_URL`: 
-  The URL of the PostgreSQL database.
-- `AWS_REGION`: 
-  The URL of the MinIO instance.
-- `AWS_ACCESS_KEY_ID`:
-  The access key ID for the MinIO instance.
-- `AWS_SECRET_ACCESS_KEY`:
-  The secret access key for the MinIO instance.
-- `STATIC_ROOT`: 
-  The directory containing the frontend static files to serve.
-- `ROCKET_OAUTH_{PROVIDER}_CLIENT_ID`: 
-  The OAuth client ID for the given provider (in ALL CAPS). 
-  Supported providers are `github`, `google` and `patreon`.
-- `ROCKET_OAUTH_{PROVIDER}_CLIENT_SECRET`: 
-  The OAuth client secret for the given provider (in ALL CAPS). 
-  Supported providers are `github`, `google` and `patreon`.
-- 
+### Rocket files
+You can configure additional local settings by creating a `Rocket.local.toml` file in the root directory.
+This file will be loaded by Rocket if it exists.
+It is included in the `.gitignore` file, so it won't be committed to the repository.
 
 ## Developing for the Frontend
 If you're not working on the frontend, you can skip this step.

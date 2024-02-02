@@ -25,7 +25,6 @@ pub async fn signup(
     emailer: EmailGuard,
 ) -> Result<Json<dto::auth::SignupResponse>, (Status, String)> {
     let form = form.into_inner();
-
     let user = User::create(
         &mut db,
         None,
@@ -39,7 +38,6 @@ pub async fn signup(
     )
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
-
     // Create the user password.
     let user_password = UserPassword::create(&mut db, &user, Some(form.password), &pepper.0, true)
         .await
@@ -98,7 +96,7 @@ pub async fn login(
     mut db: Db,
     cookies: &CookieJar<'_>,
     pepper: &State<DbPepper>,
-    form: Json<dto::auth::SignupRequest<'_>>,
+    form: Json<dto::auth::LoginRequest<'_>>,
 ) -> Result<Json<dto::Ok>, (Status, String)> {
     let form = form.into_inner();
 

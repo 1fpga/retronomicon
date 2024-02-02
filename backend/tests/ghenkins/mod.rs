@@ -57,6 +57,13 @@ async fn given_team_owned(w: &mut World, team: String, user: UserParam) {
     w.team(&user, &team).await.unwrap();
 }
 
+#[when(expr = "{user} gets their details")]
+async fn user_gets_their_details(w: &mut World, user: UserParam) {
+    let user = w.user(&user).await.unwrap();
+    let result = user.lock().await.get_user_details(None).await;
+    w.record_result(result);
+}
+
 #[when(expr = "{user} invites {user} to team {word} as {team_role}")]
 async fn user_can_invite_to_team(
     w: &mut World,

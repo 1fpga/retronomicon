@@ -14,12 +14,13 @@ pub fn create_figment(
     #[cfg(debug_assertions)]
     let figment = figment.merge(providers::Toml::file("Rocket.debug.toml"));
 
-    let figment = additional_config
-        .iter()
-        .fold(figment, |figment, path| {
-            figment.merge(providers::Toml::file(path))
-        })
-        .merge(providers::Env::prefixed("ROCKET_").split("__").global());
+    let mut f = figment;
+    for path in additional_config {
+        f = f.merge(providers::Toml::file(path));
+    }
 
-    Ok(figment.select(Profile::from_env_or("APP_PROFILE", default_profile)))
+    Ok(
+        f.merge(providers::Env::prefixed("ROCKET_").split("__").global())
+            .select(Profile::from_env_or("APP_PROFILE", default_profile)),
+    )
 }
