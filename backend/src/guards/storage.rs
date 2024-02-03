@@ -177,8 +177,17 @@ impl Storage {
         Ok(url.to_string())
     }
 
-    pub fn url_game_asset(&self, filename: &str) -> Result<String, String> {
-        let url = Url::parse(&format!("{}/{}", self.config.games_url_base(), filename)).unwrap();
+    pub fn path_for_game_image(&self, id: i32, filename: &str) -> String {
+        format!("games/{}/images/{}", id, filename)
+    }
+
+    pub fn url_for_game_image(&self, id: i32, filename: &str) -> Result<String, String> {
+        let url = Url::parse(&format!(
+            "{}/{}",
+            self.config.games_url_base(),
+            self.path_for_game_image(id, filename)
+        ))
+        .map_err(|e| e.to_string())?;
         Ok(url.to_string())
     }
 }

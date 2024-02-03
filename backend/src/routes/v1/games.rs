@@ -223,30 +223,33 @@ pub async fn games_add_artifact(
     Ok(Json(dto::Ok))
 }
 
-#[openapi(tag = "Games", ignore = "db")]
+#[openapi(tag = "Games", ignore = "db", ignore = "storage")]
 #[get("/games/<game_id>/images?<filter..>")]
 pub async fn games_images(
     mut db: Db,
+    storage: guards::storage::Storage,
     game_id: u32,
     filter: dto::games::GameImageListQueryParams,
 ) -> Result<Json<Vec<dto::images::Image>>, (Status, String)> {
+    let game_id = game_id as i32;
     let (page, limit) = filter
         .paging
         .validate()
         .map_err(|e| (Status::BadRequest, e))?;
-    let images = models::GameImage::list(&mut db, page, limit, game_id as i32)
+    let images = models::GameImage::list(&mut db, page, limit, game_id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .into_iter()
         .map(|(i, _)| {
-            let url = &format!("{}/games/{}/images/{}", game_id, i.image_name);
-            dto::images::Image {
+            let url = storage.url_for_game_image(game_id, &i.image_name)?;
+            Ok(dto::images::Image {
                 name: i.image_name,
                 url,
                 mime_type: i.mime_type,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>, String>>()
+        .map_err(|e| (Status::InternalServerError, e))?;
 
     Ok(Json(images))
 }
@@ -338,12 +341,9 @@ pub async fn games_images_upload(
                 ));
             }
 
+            let path = storage.path_for_game_image(game_id, &filename);
             storage
-                .upload_game_asset(
-                    &format!("games/{}/images/{}", game_id, filename),
-                    image.as_bytes(),
-                    mimetype.essence_str(),
-                )
+                .upload_game_asset(&path, image.as_bytes(), mimetype.essence_str())
                 .await
                 .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
