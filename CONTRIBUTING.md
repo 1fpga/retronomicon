@@ -134,11 +134,15 @@ export ROCKET_S3__REGION="http://$(docker inspect minio-dev | jq -r '.[0].Networ
 # can use `http://localhost:8000` instead.
 export ROCKET_BASE_URL="http://localhost:3000/"
 
+# This is so URLs can be built when uploading files.
+export ROCKET_S3__URL_BASE="http://localhost:9000/"
+
 docker run -it --rm \
     -e ROCKET_SECRET_KEY \
     -e ROCKET_S3__ACCESS_KEY \
     -e ROCKET_S3__SECRET_KEY \
     -e ROCKET_S3__REGION \
+    -e ROCKET_S3__URL_BASE \
     -e ROCKET_ROOT_TEAM \
     -e ROCKET_DATABASES__RETRONOMICON_DB__URL \
     -e ROCKET_BASE_URL \

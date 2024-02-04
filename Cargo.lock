@@ -271,6 +271,7 @@ dependencies = [
  "clap",
  "cucumber",
  "handlebars",
+ "hex",
  "image",
  "jsonwebtoken",
  "lettre",
@@ -2169,17 +2170,6 @@ dependencies = [
 
 [[package]]
 name = "okapi"
-version = "0.7.0-rc.1"
-source = "git+https://github.com/GREsau/okapi.git?rev=345e1176#345e11769759db84beb35c5d47daccdc381acf9e"
-dependencies = [
- "log",
- "schemars",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "okapi"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a64853d7ab065474e87696f7601cee817d200e86c42e04004e005cb3e20c3c5"
@@ -2941,7 +2931,7 @@ dependencies = [
  "clap",
  "hex",
  "mime_guess",
- "okapi 0.7.0-rc.1",
+ "okapi",
  "reqwest",
  "rocket",
  "schemars",
@@ -3127,7 +3117,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e059407ecef9ee2f071fc971e10444fcf942149deb028879d6d8ca61a7ce9edc"
 dependencies = [
  "log",
- "okapi 0.7.0",
+ "okapi",
  "rocket",
  "rocket_okapi_codegen",
  "schemars",
@@ -3410,7 +3400,6 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
- "uuid",
 ]
 
 [[package]]

@@ -33,7 +33,7 @@ impl GameImage {
     ) -> Result<bool, diesel::result::Error> {
         Ok(filename
             .chars()
-            .all(|c| c.is_alphanumeric() || "()[]{}<>-_+=!@#$%^&*~,. ".contains(c)))
+            .all(|c| c.is_alphanumeric() || "()[]{}-_+=!@#$%^&*~,. ".contains(c)))
     }
 
     pub async fn create(

@@ -126,7 +126,7 @@ macro_rules! declare_client_impl {
             post games_add_image(
                 ("games/{id}/images", id: i32),
                 @file file,
-            ) -> crate::Ok;
+            ) -> Vec<crate::images::Image>;
         }
     };
 }

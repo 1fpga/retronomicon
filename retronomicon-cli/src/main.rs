@@ -441,8 +441,8 @@ pub struct GameAddImageOpts {
     /// The game's unique id.
     game: i32,
 
-    /// The image's path.
-    path: PathBuf,
+    /// The images' path.
+    path: Vec<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -1159,8 +1159,11 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), Error> {
 
             // Make sure the game exists.
             let _ = client.games_details(*game).await?;
-            let _image = image::open(path)?;
-            client.games_add_image(*game, path).await?;
+            for p in path {
+                let _image = image::open(p)?;
+                let result = client.games_add_image(*game, p).await?;
+                output_json(result, opts)?;
+            }
             Ok(())
         }
     }

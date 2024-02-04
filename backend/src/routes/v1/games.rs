@@ -15,7 +15,6 @@ use rocket_multipart_form_data::{
 use rocket_okapi::openapi;
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::io::BufReader;
 
 const MAX_IMAGE_WIDTH: u32 = 4096;
 const MAX_IMAGE_HEIGHT: u32 = 4096;
@@ -268,7 +267,7 @@ pub async fn games_images_upload(
     game_id: i32,
     content_type: &ContentType,
     file: Data<'_>,
-) -> Result<Json<dto::Ok>, (Status, String)> {
+) -> Result<Json<Vec<dto::images::Image>>, (Status, String)> {
     // Check the uploader's role.
     let (user, team, role) =
         models::User::get_user_team_and_role(&mut db, admin.into(), config.root_team_id.into())
@@ -283,19 +282,19 @@ pub async fn games_images_upload(
     let _game = models::Game::get(&mut db, game_id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .ok_or((Status::NotFound, "Not found".to_string()))?;
+        .ok_or((Status::NotFound, "Game not found".to_string()))?;
 
     let mut options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
         MultipartFormDataField::file("file")
-            .size_limit(24.mebibytes().as_u64())
+            .size_limit(2.mebibytes().as_u64())
             .repetition(Repetition::infinite()),
     ]);
-    options.max_data_bytes = 2.mebibytes().as_u64();
     let multipart_form_data = MultipartFormData::parse(content_type, file, options)
         .await
         .map_err(|e| (Status::BadRequest, e.to_string()))?;
 
-    for files in multipart_form_data.files.values() {
+    let mut result = Vec::new();
+    for (_s, files) in multipart_form_data.files.iter() {
         for file in files {
             let filename = file
                 .file_name
@@ -311,8 +310,6 @@ pub async fn games_images_upload(
             {
                 return Err((Status::BadRequest, "Filename is invalid".to_string()));
             }
-            let f = std::fs::File::open(&file.path)
-                .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
             // Try to figure out the image format based on mimetype.
             let image_format = match mimetype.essence_str() {
@@ -327,7 +324,10 @@ pub async fn games_images_upload(
                 }
             };
 
-            let image = image::load(BufReader::new(f), image_format)
+            // Validate the image.
+            let bytes = std::fs::read(&file.path)
+                .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+            let image = image::load_from_memory_with_format(&bytes, image_format)
                 .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
             let (width, height) = image.dimensions();
@@ -342,8 +342,8 @@ pub async fn games_images_upload(
             }
 
             let path = storage.path_for_game_image(game_id, &filename);
-            storage
-                .upload_game_asset(&path, image.as_bytes(), mimetype.essence_str())
+            let url = storage
+                .upload_game_asset(&path, &bytes, mimetype.essence_str())
                 .await
                 .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
@@ -357,8 +357,14 @@ pub async fn games_images_upload(
             )
             .await
             .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+            result.push(dto::images::Image {
+                name: filename,
+                url,
+                mime_type: mimetype.essence_str().to_string(),
+            });
         }
     }
 
-    Ok(Json(dto::Ok))
+    Ok(Json(result))
 }
