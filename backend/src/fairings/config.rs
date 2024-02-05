@@ -31,15 +31,9 @@ impl RetronomiconConfig {
     }
 
     pub(crate) fn should_add_to_root(&self, email: &str) -> bool {
-        if self
-            .root_team
+        self.root_team
             .iter()
             .any(|e| WildMatch::new(e).matches(email))
-        {
-            true
-        } else {
-            false
-        }
     }
 }
 

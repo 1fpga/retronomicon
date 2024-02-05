@@ -16,7 +16,7 @@ pub fn create_figment(
 
     let mut f = figment;
     for path in additional_config {
-        f = f.adjoin(providers::Toml::file(path));
+        f = f.admerge(providers::Toml::file(path));
     }
 
     Ok(
