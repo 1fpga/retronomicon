@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct SignupRequest<'a> {
+    /// An optional username. If provided, it must be unique and will
+    /// be validated before creating the user and sending the email.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<&'a str>,
     pub email: &'a str,
     pub password: &'a str,
 }

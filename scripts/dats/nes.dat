@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<datafile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://datomatic.no-intro.org/stuff https://datomatic.no-intro.org/stuff/schema_nointro_datfile_v3.xsd">
+	<header>
+		<id>45</id>
+		<name>Nintendo - Nintendo Entertainment System (Headered)</name>
+		<description>Nintendo - Nintendo Entertainment System (Headered)</description>
+		<version>20240202-102844</version>
+		<author>aci68, Arctic Circle System, baldjared, BigFred, bikerspade, BitLooter, Blank, buckwheat, C. V. Reynolds, chillerecke, DeadSkullzJr, DeriLoko3, EggmanPEI, einstein95, fuzzball, Gefflon, Hiccup, Jack, jimmsu, Just001Kim, kazumi213, Lesserkuma, Madeline, Money_114, NESBrew12, niemand, nnssxx, norkmetnoil577, NovaAurora, omonim2007, Powerpuff, PPLToast, Psychofox11, psykopat, rarenight, relax, RetroUprising, Rifu, sCZther, SonGoku, Special T, Tauwasser, ToeKnee, togemet2, UnlockerPT, Vigi, xuom2</author>
+		<homepage>No-Intro</homepage>
+		<url>https://www.no-intro.org</url>
+		<clrmamepro forcenodump="required"/>
+	</header>
+	<game name="10-Yard Fight (Japan)" id="0002" cloneofid="0003">
+		<description>10-Yard Fight (Japan)</description>
+		<rom name="10-Yard Fight (Japan).nes" size="24592" crc="44aa3eeb" md5="1378270f6cf90095b7fea1e6648503a4" sha1="2a91760c828b26adc765ba9b0322fb770089e391" sha256="82e8e0cc827e061ff9d5707ec60a2658acbd47814b29ab58b122e526bc949149" status="verified" header="4E 45 53 1A 01 01 00 08 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="10-Yard Fight (USA, Europe)" id="0003">
+		<description>10-Yard Fight (USA, Europe)</description>
+		<rom name="10-Yard Fight (USA, Europe).nes" size="40976" crc="c986cda2" md5="7b1d38579ede25e20b3aaf870be69c42" sha1="67f60e1d139dd85baef455b3b1228fbb5059bdaa" sha256="d32fbacaa21b9c99f9d0e84b91ffec935534f6fdca2dbb0cd1d1ef2e870eefdf" status="verified" header="4E 45 53 1A 02 01 00 08 00 00 00 00 02 00 00 01"/>
+	</game>
+	<game name="10-Yard Fight (Japan) (Rev 1)" id="2601" cloneofid="0003">
+		<description>10-Yard Fight (Japan) (Rev 1)</description>
+		<rom name="10-Yard Fight (Japan) (Rev 1).nes" size="24592" crc="83146ecf" md5="1e2ec36ed66519dd03a52f1847e9d56d" sha1="5b073d8dfffe1fef85a047c2b7b063f9451c9350" sha256="7861d4e443dd02d9c06442d135ce64c098b772359a94708a52006a061709cf0c" status="verified" header="4E 45 53 1A 01 01 00 08 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Adventures of Lolo (Europe)" id="0058">
+		<description>Adventures of Lolo (Europe)</description>
+		<rom name="Adventures of Lolo (Europe).nes" size="65552" crc="bf879b71" md5="7ee1bf70f29a190d4ddce943a75dcf79" sha1="d42fe0f5aa356ecb8f503d1b470c7fbb757f390f" sha256="c738e19f2002c2dc9fbb245763b08c7c1be2778e18e5726617a0f8826329db17" status="verified" header="4E 45 53 1A 02 04 10 08 50 00 00 00 01 00 00 01"/>
+	</game>
+	<game name="Adventures of Lolo (Japan)" id="0059" cloneofid="0061">
+		<description>Adventures of Lolo (Japan)</description>
+		<rom name="Adventures of Lolo (Japan).nes" size="65552" crc="c42f6e40" md5="160f9864703b7044c825c7d07866456c" sha1="1f375158543ef16b651b177ba606081faccf2b4d" sha256="200080cd9879ad4accb2ebaaf35851b46ee64e2d0d772c3323af97e021d8e091" status="verified" header="4E 45 53 1A 02 04 40 08 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Adventures of Lolo (USA)" id="0060" cloneofid="0058">
+		<description>Adventures of Lolo (USA)</description>
+		<rom name="Adventures of Lolo (USA).nes" size="65552" crc="3d59cddd" md5="c0b0b485d2646c13ef9032d83e725f3e" sha1="576aba834b6d9f47c3656651d19c10ba36504278" sha256="144f0048313340500d65b2ff3f5a65088fbb27399116e1ec9523849f6a60c5bd" status="verified" header="4E 45 53 1A 02 04 10 08 50 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Bee 52 (USA) (Unl)" id="0233">
+		<description>Bee 52 (USA) (Unl)</description>
+		<rom name="Bee 52 (USA) (Unl).nes" size="65552" crc="8b03a899" md5="c77fce1e7e52bccfbe5e92ff7121b682" sha1="0f604351fb39b2027e4de6a3e4577994c1b4b761" sha256="d1f0e75fc72255d3b26da07f6418f04bedf714aefb373b3a37611d242516e8e4" status="verified" header="4E 45 53 1A 04 00 71 48 00 00 00 07 02 00 00 01"/>
+	</game>
+	<game name="Boulder Dash (Japan)" id="0293" cloneofid="0292">
+		<description>Boulder Dash (Japan)</description>
+		<rom name="Boulder Dash (Japan).nes" size="65552" crc="c5b0bcea" md5="1594f3c8af12093ccf8f689be65257bf" sha1="00f5c52900c3d85058e09a2772568f5811aac311" sha256="4be0879c915791093d9db48c7ee0ad591f07f6172890ae135e98e7820d995ea7" status="verified" header="4E 45 53 1A 02 04 10 08 50 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Castlevania III - Dracula's Curse (USA)" id="0362" cloneofid="0361">
+		<description>Castlevania III - Dracula's Curse (USA)</description>
+		<rom name="Castlevania III - Dracula's Curse (USA).nes" size="393232" crc="7cf70cde" md5="561999daa97a1c30c81cab5142a1d672" sha1="0bb28dd9c2f8dfabb3349d1f65407b941ee78435" sha256="085ec6395681c7ebfda19c2986069c21a3d27738cc61ada76249de70a07ed7d3" status="verified" header="4E 45 53 1A 10 10 50 08 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Castlevania III - Dracula's Curse (Europe) (Wii Virtual Console)" id="2872" cloneofid="0361">
+		<description>Castlevania III - Dracula's Curse (Europe) (Wii Virtual Console)</description>
+		<rom name="Castlevania III - Dracula's Curse (Europe) (Wii Virtual Console).nes" size="393232" crc="6a1fe6d3" md5="1b44fbd3eff6da2ddcf529e3607da20e" sha1="986b656a5dcdb71478b94d17ccae913a6cc5881d" sha256="a9b5467c4350e4123f98b76b26e2121af3b7e116062e051eb94983a501650a72" header="4E 45 53 1A 10 10 50 08 00 00 00 00 01 00 00 01"/>
+	</game>
+	<game name="Castlevania III - Dracula's Curse (USA, Europe) (USA Wii Virtual Console, Wii U Virtual Console)" id="2873" cloneofid="0361">
+		<description>Castlevania III - Dracula's Curse (USA, Europe) (USA Wii Virtual Console, Wii U Virtual Console)</description>
+		<rom name="Castlevania III - Dracula's Curse (USA, Europe) (USA Wii Virtual Console, Wii U Virtual Console).nes" size="393232" crc="76d23349" md5="0ed4b0b8dde4218346bc707551d7a4d5" sha1="19881726e351e938ebce4a7ed47287b168ac0d68" sha256="0fcfbabfa05c1bdcd7ef10ae14058038e681562e1e25ca0609cc7d19bf222592" status="verified" header="4E 45 53 1A 10 10 50 08 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Donkey Kong - Original Edition (Europe) (Wii Virtual Console) (NTSC)" id="2746" cloneofid="0544">
+		<description>Donkey Kong - Original Edition (Europe) (Wii Virtual Console) (NTSC)</description>
+		<rom name="Donkey Kong - Original Edition (Europe) (Wii Virtual Console) (NTSC).nes" size="65552" crc="3f26ebc5" md5="ead86860981932bee86d82ad547533b7" sha1="6733293bea208f66b64e236e83486e7fa4d14670" sha256="e21f4d1c9dfa2bebc9672e74a7adc5f28e530f6a0f6cb6c26184498d349efdac" status="verified" header="4E 45 53 1A 02 04 30 08 20 00 00 00 02 00 00 01"/>
+	</game>
+	<game name="Fantasy Zone (Japan) (Sunsoft)" id="0732">
+		<description>Fantasy Zone (Japan) (Sunsoft)</description>
+		<rom name="Fantasy Zone (Japan) (Sunsoft).nes" size="131088" crc="584f706c" md5="76dba7dc0d6f61abc11f4d136bc22084" sha1="578bc2d91db7c71fabaeb9624b89253ea742c64f" sha256="0d74632b64868d3d95519da3087fc3307253a18cb50387f7e9de613441947936" status="verified" header="4E 45 53 1A 08 00 D0 58 00 00 00 07 00 00 00 01"/>
+	</game>
+	<game name="Fantasy Zone (USA) (Tengen) (Unl)" id="0733">
+		<description>Fantasy Zone (USA) (Tengen) (Unl)</description>
+		<rom name="Fantasy Zone (USA) (Tengen) (Unl).nes" size="131088" crc="2b137c87" md5="6da2824ae6604cf06288a4edf684c796" sha1="7605d4d8748e63af582b4180a5c940d477a39639" sha256="758f8064a595cb3053a8a5a929f4762e988715ee4055daa8c05585a3e895dbff" status="verified" header="4E 45 53 1A 04 08 E0 C8 00 00 00 00 00 00 00 01"/>
+	</game>
+	<game name="Ginga no Sannin (Japan)" id="0859">
+		<description>Ginga no Sannin (Japan)</description>
+		<rom name="Ginga no Sannin (Japan).nes" size="131088" crc="2ef88bac" md5="e2486d2f635d473d50e60079b27adac0" sha1="c2ffe139e9be5cda99c16a56df56e74c6ec67795" sha256="8ab41331f89612819f65099ad9a971ce967b8b78e0d822aa1bfd934ca737ac38" status="verified" header="4E 45 53 1A 08 00 21 08 20 00 00 07 00 00 00 01"/>
+	</game>
+	<game name="Kid Icarus (USA, Europe) (Rev 1)" id="1176">
+		<description>Kid Icarus (USA, Europe) (Rev 1)</description>
+		<rom name="Kid Icarus (USA, Europe) (Rev 1).nes" size="131088" crc="f6d1eca3" md5="77982c27f0589225d94f2b48b11915e3" sha1="80403d335eee9636959b9ae2efa3e27014c7a779" sha256="335d09f48e5ebb1d7123d1599c5867b9e52b5b4393b7ad92c39cf6a064424233" status="verified" header="4E 45 53 1A 08 00 10 08 00 00 07 07 02 00 00 01"/>
+	</game>
+	<game name="Kid Icarus (USA, Europe)" id="1177" cloneofid="1176">
+		<description>Kid Icarus (USA, Europe)</description>
+		<rom name="Kid Icarus (USA, Europe).nes" size="131088" crc="f95e4e9a" md5="9238f69250c73c3f89bda2ba51831f45" sha1="b11b8c90b25ae6818427b494f24f79a9a112f2ee" sha256="931786d6920dea7f9e183d907d3c4cff123197fcd14ae4066f1e817df32fd02f" status="verified" header="4E 45 53 1A 08 00 10 08 00 00 07 07 02 00 00 01"/>
+	</game>
+</datafile>

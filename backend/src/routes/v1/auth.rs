@@ -27,7 +27,7 @@ pub async fn signup(
     let form = form.into_inner();
     let user = User::create(
         &mut db,
-        None,
+        form.username,
         None,
         None,
         form.email,

@@ -12,15 +12,15 @@ pub fn create_figment(
 
     // Add local configuration files in debug.
     #[cfg(debug_assertions)]
-    let figment = figment.merge(providers::Toml::file("Rocket.debug.toml"));
+    let figment = figment.admerge(providers::Toml::file("Rocket.debug.toml"));
 
     let mut f = figment;
     for path in additional_config {
-        f = f.merge(providers::Toml::file(path));
+        f = f.admerge(providers::Toml::file(path));
     }
 
     Ok(
-        f.merge(providers::Env::prefixed("ROCKET_").split("__").global())
+        f.admerge(providers::Env::prefixed("ROCKET_").split("__").global())
             .select(Profile::from_env_or("APP_PROFILE", default_profile)),
     )
 }

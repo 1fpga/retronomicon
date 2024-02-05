@@ -46,7 +46,7 @@ function App() {
       newUser.description = data.get("description_");
     }
 
-    axios.put(process.env.REACT_APP_BACKEND_URL + "/me/update", newUser)
+    axios.put(process.env.REACT_APP_BACKEND_URL + "/me", newUser)
         .then((res) => getUser());
   }
 

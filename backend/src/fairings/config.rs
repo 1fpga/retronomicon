@@ -5,20 +5,13 @@ use base64::Engine;
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use wildmatch::WildMatch;
 
-#[derive(Default, Debug, Clone, serde::Deserialize)]
-struct DebugConfig {
-    pub additional_root_team: Vec<String>,
-    pub bypass_email_validation: Vec<String>,
-}
-
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct RetronomiconConfig {
     pub base_url: String,
     pub root_team: Vec<String>,
     pub root_team_id: i32,
 
-    #[cfg(debug_assertions)]
-    debug: Option<DebugConfig>,
+    bypass_email_validation: Vec<String>,
 
     template_dir: String,
 
@@ -27,49 +20,20 @@ pub struct RetronomiconConfig {
 
 impl RetronomiconConfig {
     #[must_use]
-    fn debug(&self) -> Option<&DebugConfig> {
-        #[cfg(debug_assertions)]
-        {
-            self.debug.as_ref()
-        }
-
-        #[cfg(not(debug_assertions))]
-        {
-            None
-        }
-    }
-
-    #[must_use]
     pub fn templates(&self) -> TemplateResolver {
         TemplateResolver::new(&self.template_dir)
     }
 
     pub(crate) fn bypass_email_validation(&self, email: &str) -> bool {
-        if let Some(debug) = self.debug() {
-            debug
-                .bypass_email_validation
-                .iter()
-                .any(|e| WildMatch::new(e).matches(email))
-        } else {
-            false
-        }
+        self.bypass_email_validation
+            .iter()
+            .any(|e| WildMatch::new(e).matches(email))
     }
 
     pub(crate) fn should_add_to_root(&self, email: &str) -> bool {
-        if self
-            .root_team
+        self.root_team
             .iter()
             .any(|e| WildMatch::new(e).matches(email))
-        {
-            true
-        } else if let Some(debug) = self.debug() {
-            debug
-                .additional_root_team
-                .iter()
-                .any(|e| WildMatch::new(e.trim()).matches(email))
-        } else {
-            false
-        }
     }
 }
 

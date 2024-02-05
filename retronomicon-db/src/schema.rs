@@ -99,6 +99,7 @@ diesel::table! {
         height -> Int4,
         #[max_length = 255]
         mime_type -> Varchar,
+        url -> Varchar,
     }
 }
 

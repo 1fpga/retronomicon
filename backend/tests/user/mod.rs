@@ -53,20 +53,6 @@ pub enum User {
 }
 
 impl User {
-    fn is_authenticated(&self) -> bool {
-        match self {
-            User::Auth { .. } => true,
-            _ => false,
-        }
-    }
-
-    fn is_anonymous(&self) -> bool {
-        match self {
-            User::Anonymous { .. } => true,
-            _ => false,
-        }
-    }
-
     pub fn id(&self) -> i32 {
         match self {
             User::NoAuth { id, .. } | User::Auth { id, .. } => *id,
@@ -150,14 +136,6 @@ impl User {
         self.req(Method::Put, uri, body).await
     }
 
-    async fn delete<R: serde::de::DeserializeOwned>(
-        &mut self,
-        uri: Origin<'_>,
-        body: &impl serde::Serialize,
-    ) -> Result<R, Error> {
-        self.req(Method::Delete, uri, body).await
-    }
-
     fn gen_string(len: usize) -> String {
         rand::thread_rng()
             .sample_iter(&Alphanumeric)
@@ -199,6 +177,7 @@ impl User {
             let user = client
                 .post(uri!(v1::auth::signup()))
                 .json(&dto::auth::SignupRequest {
+                    username: None,
                     email: &email,
                     password,
                 })

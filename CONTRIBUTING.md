@@ -78,8 +78,10 @@ Create 3 buckets:
 - `retronomicon-users`.
   This will contain user-specific files (e.g. save states and screenshots).
 
-For local development, since the docker instance isn't accessible from outside your computer if using the docker commands above, you can set the bucket policies to `Public`.
+For local development, since the docker instance isn't accessible from outside your computer if using the docker commands above, you should set the bucket policies to `Public`.
+Otherwise, you won't be able to download the files directly.
 Click on each bucket to change their access policy.
+Public access is fine locally, in production it is set as read-only for the `retronomicon-cores` and `retronomicon-games` buckets, and private for the `retronomicon-users` bucket.
 
 Next, you need to create API access keys.
 Go to the `Access Keys` tab and click on `Create access key` button in the top right, then click on `Create`.
@@ -123,12 +125,12 @@ export ROCKET_SECRET_KEY="dH+kbvuRgr6z/OQaycGZEjMFKRFnhBlJJha9CYnWCNNpnsGHSGcOb+
 
 # This will add additional users to the root team.
 # This has to be an array of strings. Any wildcard (*, ?) will be interpreted.
-export ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM='[]'
+export ROCKET_ROOT_TEAM='["*@admin"]'
 
 # Get the IP address of the containers above.
 # Change this to your IP address if you're not using Docker.
 export ROCKET_DATABASES__RETRONOMICON_DB__URL="postgres://local_user:mysecretpassword@$(docker inspect pgsql-dev | jq -r '.[0].NetworkSettings.IPAddress'):5432/local_retronomicon"
-export ROCKET_S3__REGION="$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
+export ROCKET_S3__REGION="http://$(docker inspect minio-dev | jq -r '.[0].NetworkSettings.IPAddress'):9000"
 
 # If you just want to run Retronomicon locally without your own frontend, you
 # can use `http://localhost:8000` instead.
@@ -139,7 +141,10 @@ docker run -it --rm \
     -e ROCKET_S3__ACCESS_KEY \
     -e ROCKET_S3__SECRET_KEY \
     -e ROCKET_S3__REGION \
-    -e ROCKET_DEBUG__ADDITIONAL_ROOT_TEAM \
+    -e ROCKET_S3__CORES_BUCKET_URL=http://localhost:9000/retronomicon-cores/ \
+    -e ROCKET_S3__GAMES_BUCKET_URL=http://localhost:9000/retronomicon-games/ \
+    -e ROCKET_S3__USERS_BUCKET_URL=http://localhost:9000/retronomicon-users/ \
+    -e ROCKET_ROOT_TEAM \
     -e ROCKET_DATABASES__RETRONOMICON_DB__URL \
     -e ROCKET_BASE_URL \
     -p 127.0.0.1:8000:8000 \
@@ -185,16 +190,25 @@ npm start -w frontend
 To create a user without using OAUTH and without an SMTP server, you can use the following command:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"email":"some@email", "password":"some_password"}' \
+curl -X POST -H "Content-Type: application/json" -d '{"username": "myuser", "email":"some@email", "password":"some_password"}' \
     http://localhost:8000/api/v1/signup
 ```
 
 This will create a user with the given email and password in the database, and create a validation token.
 
+If you set the bypass for your username, the user will be created without validating its token.
+
+Otherwise, you will have to validate the token.
 In the terminal logs, you will see a message like this:
+
 ```
 Url to validate email: http://localhost:8000/api/auth/verify?email=hans@larsen.online&token=pV1lD2qqKiJ0R7_AT1uPVnmeBjUbMjvOSfH8FI02wmw
 ```
 
-Then use the link to validate the email address (no password necessary).
-That should also set cookies and log you in.
+Use the link to validate the email address (no password necessary).
+That should also set cookies and log you in if you're using a browser.
+
+## Setting up a Username
+Users without a username will still be considered unauthenticated and will have limited access to the APIs.
+
+Be sure to set a username BEFORE creating a JWT token, as they contain the username encrypted and it won't change until you recreate a token.

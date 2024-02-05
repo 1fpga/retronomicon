@@ -21,6 +21,7 @@ clap = { version = "4.3.24", features = [ "derive", "env" ] }
 clap-verbosity-flag = "2.0.1"
 datary = { path = "../datary", version = "0.1.0" }
 hex = "0.4.3"
+image = "0.24.8"
 mime_guess2 = "2.0.5"
 reqwest = { version = "0.11.20", features = ["stream", "json", "cookies"] }
 retronomicon-dto = { path = "../retronomicon-dto", version = "0.2", features = ["cli", "client"] }

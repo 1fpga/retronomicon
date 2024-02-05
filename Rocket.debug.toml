@@ -8,14 +8,19 @@ db_pepper = ""
 
 template_dir = "templates"
 
-[debug]
-additional_root_team = []
-bypass_email_validation = ["*"]
+# In debug, allows anyone from the admin domain to be used as admin.
+root_team = ["*@admin"]
+# Also bypass validation for those, as the domain does not exist.
+bypass_email_validation = ["*@admin"]
 
 [s3]
 region = "http://localhost:9000"
 access_key = "<USE_ENV_VARS>"
 secret_key = "<USE_ENV_VARS>"
+
+cores_bucket_url = "http://localhost:9000/retronomicon-cores"
+games_bucket_url = "http://localhost:9000/retronomicon-games"
+users_bucket_url = "http://localhost:9000/retronomicon-users"
 
 [databases.retronomicon_db]
 url = "postgres://local_user:mysecretpassword@localhost:5432/local_retronomicon"
