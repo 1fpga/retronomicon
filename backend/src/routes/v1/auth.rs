@@ -24,10 +24,11 @@ pub async fn signup(
     config: &State<RetronomiconConfig>,
     emailer: EmailGuard,
 ) -> Result<Json<dto::auth::SignupResponse>, (Status, String)> {
+    rocket::error!("1");
     let form = form.into_inner();
     let user = User::create(
         &mut db,
-        None,
+        form.username,
         None,
         None,
         form.email,
@@ -38,12 +39,15 @@ pub async fn signup(
     )
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    eprintln!("2");
     // Create the user password.
     let user_password = UserPassword::create(&mut db, &user, Some(form.password), &pepper.0, true)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+    eprintln!("3");
 
     if let Some(token) = user_password.validation_token {
+        eprintln!("4");
         // Check if we bypass the validation_token and go straight to login.
         if config.inner().bypass_email_validation(form.email) {
             crate::routes::auth::login_token_callback(
@@ -59,6 +63,7 @@ pub async fn signup(
                 id: user.id,
             }));
         }
+        eprintln!("5");
 
         // Send an email.
         emailer.send_email_verification(
@@ -80,6 +85,7 @@ pub async fn signup(
             id: user.id,
         }))
     } else {
+        eprintln!("6");
         let _ = user_password.delete(&mut db).await;
         let _ = user.delete_row(&mut db).await;
         Err((

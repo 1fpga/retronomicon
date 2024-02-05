@@ -23,6 +23,7 @@ pub struct GameImage {
     pub width: i32,
     pub height: i32,
     pub mime_type: String,
+    pub url: String,
 }
 
 impl GameImage {
@@ -43,6 +44,7 @@ impl GameImage {
         width: i32,
         height: i32,
         mime_type: &str,
+        url: &str,
     ) -> Result<Self, diesel::result::Error> {
         diesel::insert_into(schema::game_images::table)
             .values((
@@ -51,6 +53,7 @@ impl GameImage {
                 schema::game_images::width.eq(width),
                 schema::game_images::height.eq(height),
                 schema::game_images::mime_type.eq(mime_type),
+                schema::game_images::url.eq(url),
             ))
             .returning(schema::game_images::all_columns)
             .get_result::<Self>(db)

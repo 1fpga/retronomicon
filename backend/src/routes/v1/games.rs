@@ -222,11 +222,10 @@ pub async fn games_add_artifact(
     Ok(Json(dto::Ok))
 }
 
-#[openapi(tag = "Games", ignore = "db", ignore = "storage")]
+#[openapi(tag = "Games", ignore = "db")]
 #[get("/games/<game_id>/images?<filter..>")]
 pub async fn games_images(
     mut db: Db,
-    storage: guards::storage::Storage,
     game_id: u32,
     filter: dto::games::GameImageListQueryParams,
 ) -> Result<Json<Vec<dto::images::Image>>, (Status, String)> {
@@ -240,10 +239,9 @@ pub async fn games_images(
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .into_iter()
         .map(|(i, _)| {
-            let url = storage.url_for_game_image(game_id, &i.image_name)?;
             Ok(dto::images::Image {
                 name: i.image_name,
-                url,
+                url: i.url,
                 mime_type: i.mime_type,
             })
         })
@@ -279,12 +277,12 @@ pub async fn games_images_upload(
         return Err((Status::Forbidden, "Forbidden".to_string()));
     }
 
-    let _game = models::Game::get(&mut db, game_id)
+    let game = models::Game::get(&mut db, game_id)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?
         .ok_or((Status::NotFound, "Game not found".to_string()))?;
 
-    let mut options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
         MultipartFormDataField::file("file")
             .size_limit(2.mebibytes().as_u64())
             .repetition(Repetition::infinite()),
@@ -341,7 +339,7 @@ pub async fn games_images_upload(
                 ));
             }
 
-            let path = storage.path_for_game_image(game_id, &filename);
+            let path = guards::storage::Paths::path_for_game_image(&game, &filename);
             let url = storage
                 .upload_game_asset(&path, &bytes, mimetype.essence_str())
                 .await
@@ -354,6 +352,7 @@ pub async fn games_images_upload(
                 width as i32,
                 height as i32,
                 mimetype.essence_str(),
+                &url,
             )
             .await
             .map_err(|e| (Status::InternalServerError, e.to_string()))?;

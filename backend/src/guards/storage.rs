@@ -1,4 +1,5 @@
 use reqwest::Url;
+use retronomicon_db::models;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::FromRequest;
@@ -10,22 +11,33 @@ use s3::Region;
 use serde::Deserialize;
 use std::str::Utf8Error;
 
-#[derive(Clone, Deserialize)]
+pub struct Paths;
+
+impl Paths {
+    pub fn path_for_core_artifact(
+        core: &models::Core,
+        release: &models::CoreRelease,
+        file_name: &str,
+    ) -> String {
+        format!("{}/{}/{}", core.slug, release.version, file_name)
+    }
+
+    pub fn path_for_game_image(game: &models::Game, filename: &str) -> String {
+        format!("games/{}/images/{}", game.id, filename)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct StorageConfig {
     region: String,
-    /// The base URL for the S3 bucket. This is used to construct the URL for the uploaded file.
-    /// If this is not set, and the *_url_base fields are not set, the server will panic when
-    /// using any storage functionality.
-    url_base: Option<String>,
 
     access_key: String,
     secret_key: String,
 
     cores_bucket: String,
-    cores_url_base: Option<String>,
-
+    cores_bucket_url: Option<String>,
     games_bucket: String,
-    games_url_base: Option<String>,
+    games_bucket_url: Option<String>,
 }
 
 impl StorageConfig {
@@ -44,24 +56,6 @@ impl StorageConfig {
             region: "eu-central-1".to_owned(),
             endpoint: self.region.clone(),
         })
-    }
-
-    pub fn url_base(&self) -> Result<&str, String> {
-        self.url_base
-            .as_deref()
-            .ok_or_else(|| "No URL base set for storage".to_string())
-    }
-
-    pub fn cores_url_base(&self) -> &str {
-        self.cores_url_base
-            .as_deref()
-            .unwrap_or_else(|| self.url_base().expect("No URL base set for S3 cores"))
-    }
-
-    pub fn games_url_base(&self) -> &str {
-        self.games_url_base
-            .as_deref()
-            .unwrap_or_else(|| self.url_base().expect("No URL base set for S3 cores"))
     }
 }
 
@@ -108,11 +102,12 @@ impl Storage {
     async fn upload(
         &self,
         bucket_name: &str,
+        bucket_url_base: Option<&str>,
         public: bool,
         filename: &str,
         data: &[u8],
         content_type: &str,
-    ) -> Result<(), String> {
+    ) -> Result<Url, String> {
         let bucket = self
             .bucket(bucket_name, public)
             .await
@@ -136,7 +131,16 @@ impl Storage {
                 response.status_code()
             ));
         }
-        Ok(())
+
+        let url = match bucket_url_base {
+            Some(url_base) => Url::parse(url_base),
+            None => Url::parse(&bucket.url()),
+        }
+        .map_err(|e| e.to_string())?
+        .join(filename)
+        .map_err(|e| e.to_string())?;
+
+        Ok(url)
     }
 
     pub async fn upload_core(
@@ -147,15 +151,14 @@ impl Storage {
     ) -> Result<String, String> {
         self.upload(
             self.config.cores_bucket.as_str(),
+            self.config.cores_bucket_url.as_deref(),
             true,
             filename,
             data,
             content_type,
         )
-        .await?;
-        let url = Url::parse(&format!("{}/{}", self.config.cores_url_base(), filename)).unwrap();
-
-        Ok(url.to_string())
+        .await
+        .map(|url| url.to_string())
     }
 
     pub async fn upload_game_asset(
@@ -166,28 +169,13 @@ impl Storage {
     ) -> Result<String, String> {
         self.upload(
             self.config.games_bucket.as_str(),
+            self.config.games_bucket_url.as_deref(),
             true,
             filename,
             data,
             content_type,
         )
-        .await?;
-        let url = Url::parse(&format!("{}/{}", self.config.games_url_base(), filename)).unwrap();
-
-        Ok(url.to_string())
-    }
-
-    pub fn path_for_game_image(&self, id: i32, filename: &str) -> String {
-        format!("games/{}/images/{}", id, filename)
-    }
-
-    pub fn url_for_game_image(&self, id: i32, filename: &str) -> Result<String, String> {
-        let url = Url::parse(&format!(
-            "{}/{}",
-            self.config.games_url_base(),
-            self.path_for_game_image(id, filename)
-        ))
-        .map_err(|e| e.to_string())?;
-        Ok(url.to_string())
+        .await
+        .map(|url| url.to_string())
     }
 }

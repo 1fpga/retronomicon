@@ -22,6 +22,10 @@ cores_bucket = "retronomicon-cores"
 games_bucket = "retronomicon-games"
 users_bucket = "retronomicon-users"
 
+cores_bucket_url = "https://cores.retronomicon.land"
+games_bucket_url = "https://games.retronomicon.land"
+users_bucket_url = "https://u.retronomicon.land"
+
 [default.databases.retronomicon_db]
 pool_size = 5
 

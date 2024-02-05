@@ -18,5 +18,9 @@ region = "http://localhost:9000"
 access_key = "<USE_ENV_VARS>"
 secret_key = "<USE_ENV_VARS>"
 
+cores_bucket_url = "http://localhost:9000/retronomicon-cores"
+games_bucket_url = "http://localhost:9000/retronomicon-games"
+users_bucket_url = "http://localhost:9000/retronomicon-users"
+
 [databases.retronomicon_db]
 url = "postgres://local_user:mysecretpassword@localhost:5432/local_retronomicon"

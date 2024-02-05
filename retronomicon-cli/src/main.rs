@@ -101,6 +101,10 @@ enum Command {
 
 #[derive(Debug, Parser)]
 pub struct LoginOpts {
+    /// Username to use for authentication.
+    #[clap(long)]
+    username: Option<String>,
+
     /// The email to use for authentication. If omitted, the user will be prompted for it.
     email: Option<String>,
 }
@@ -1203,6 +1207,7 @@ async fn signup(opts: &Opts, signup_opts: &LoginOpts) -> Result<(), Error> {
         "/api/v1/signup",
         opts,
         dto::auth::SignupRequest {
+            username: signup_opts.username.as_deref(),
             email: email.trim(),
             password: &password,
         },

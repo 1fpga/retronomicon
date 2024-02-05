@@ -1,4 +1,5 @@
 use crate::guards;
+use crate::guards::storage::Paths;
 use crate::utils::acls;
 use retronomicon_db::models;
 use retronomicon_db::types::FetchModel;
@@ -265,7 +266,7 @@ async fn upload_single_artifact(
     // Upload to storage.
     let download_url = storage
         .upload_core(
-            &format!("{}/{}/{}", core.slug, release.version, file_name),
+            &Paths::path_for_core_artifact(&core, &release, file_name),
             file_data,
             mime_type,
         )

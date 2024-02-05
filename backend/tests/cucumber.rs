@@ -88,7 +88,8 @@ impl World {
         let figment =
             config::create_figment(&[relative!("tests/Rocket.test.toml").into()], "debug")
                 .unwrap()
-                .merge(("log_level", "critical"));
+                // .merge(("log_level", "critical"))
+            ;
 
         let secret_key = figment
             .find_value("secret_key")
