@@ -2,7 +2,7 @@
 # This WILL NOT (and SHOULD NOT) be used in production. It contains keys
 # that are valid but should not be used in a real production environment.
 
-log_level = "off"
+log_level = "critical"
 
 # This will also be used as the JWT key and the database pepper.
 secret_key = "dH+kbvuRgr6z/OQaycGZEjMFKRFnhBlJJha9CYnWCNNpnsGHSGcOb+HZsmwLGoOf84Xz5d1EGMT/1EnVJxoDFw=="
@@ -14,8 +14,12 @@ bypass_email_validation = ["*"]
 
 [s3]
 region = "http://localhost:9000"
-access_key = "<USE_ENV_VARS>"
-secret_key = "<USE_ENV_VARS>"
+access_key = "$ROCKET_S3__ACCESS_KEY"
+secret_key = "$ROCKET_S3__SECRET_KEY"
+
+cores_bucket_url = "http://localhost:9000/retronomicon-cores/"
+games_bucket_url = "http://localhost:9000/retronomicon-games/"
+users_bucket_url = "http://localhost:9000/retronomicon-users/"
 
 [databases.retronomicon_db]
 url = "postgres://local_user:mysecretpassword@localhost:5432/local_retronomicon"

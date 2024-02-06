@@ -48,4 +48,5 @@ hex = "0.4.3"
 [dev-dependencies]
 backend = { path = "." }
 cucumber = { version = "0.20.2", features = ["libtest"] }
+embedded-graphics = "0.8.1"
 tokio = "1.35.1"

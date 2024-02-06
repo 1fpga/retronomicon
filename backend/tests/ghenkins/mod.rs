@@ -18,7 +18,7 @@ impl FromStr for TeamRole {
 }
 
 #[derive(Debug, cucumber::Parameter)]
-#[param(name = "user", regex = r#"(admin (\w+)|user (\w+)|anonymous)"#)]
+#[param(name = "user", regex = r#"(admin (\w+)|user (\w+)|anonymous user)"#)]
 pub enum UserParam {
     Admin(String),
     User(String),
@@ -29,7 +29,7 @@ impl FromStr for UserParam {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "anonymous" {
+        if s == "anonymous user" {
             Ok(Self::Anonymous)
         } else if let Some(name) = s.strip_prefix("admin ") {
             Ok(Self::Admin(name.to_string()))
@@ -192,4 +192,62 @@ async fn game_exists(w: &mut World, game: String, system: String) {
     let result = user.lock().await.get_game_by_id(game_id).await.unwrap();
 
     assert_eq!(result.system.id, system_id);
+}
+
+/// Create a game on a default system.
+#[given(expr = "game {word}")]
+async fn given_a_game(w: &mut World, game: String) {
+    given_a_user_auth(w, UserParam::Admin("default".to_string())).await;
+    given_team_owned(
+        w,
+        "default".to_string(),
+        UserParam::Admin("default".to_string()),
+    )
+    .await;
+
+    system_owned(
+        w,
+        "default".to_string(),
+        UserParam::Admin("default".to_string()),
+        "default".to_string(),
+    )
+    .await;
+    game_create(
+        w,
+        UserParam::Admin("default".to_string()),
+        game,
+        "default".to_string(),
+    )
+    .await;
+    w.assert_result_ok();
+}
+
+#[when(expr = "{user} uploads image {word} to game {word}")]
+async fn game_upload_image(w: &mut World, user: UserParam, image: String, game: String) {
+    let user = w.auth_user(&user).await.unwrap();
+    let game_id = *w.games.get(&game).unwrap();
+
+    let result = user.lock().await.upload_image(game_id, &image).await;
+    w.record_result(result);
+}
+
+#[then(expr = "{user} can see image {word} of game {word}")]
+async fn then_user_can_see(w: &mut World, user: UserParam, image: String, game: String) {
+    w.assert_result_ok();
+
+    let user = w.user(&user).await.unwrap();
+    let game_id = *w.games.get(&game).unwrap();
+    let result = user.lock().await.get_game_images(game_id).await.unwrap();
+
+    let i = result
+        .iter()
+        .find(|i| i.name == format!("{image}.png"))
+        .expect("Image not in the list of images.");
+
+    // Download the image.
+    reqwest::get(&i.url)
+        .await
+        .expect("Could not get a response")
+        .error_for_status()
+        .expect("Could not download the image");
 }

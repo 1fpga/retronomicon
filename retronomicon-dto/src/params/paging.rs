@@ -11,6 +11,7 @@ pub const LIMIT_MAX: i64 = 100;
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "cli", derive(clap::Parser))]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "rocket", derive(rocket::UriDisplayQuery))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct PagingParams {
     /// The page index to retrieve. The first page is 0. This will

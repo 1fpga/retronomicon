@@ -141,9 +141,6 @@ docker run -it --rm \
     -e ROCKET_S3__ACCESS_KEY \
     -e ROCKET_S3__SECRET_KEY \
     -e ROCKET_S3__REGION \
-    -e ROCKET_S3__CORES_BUCKET_URL=http://localhost:9000/retronomicon-cores/ \
-    -e ROCKET_S3__GAMES_BUCKET_URL=http://localhost:9000/retronomicon-games/ \
-    -e ROCKET_S3__USERS_BUCKET_URL=http://localhost:9000/retronomicon-users/ \
     -e ROCKET_ROOT_TEAM \
     -e ROCKET_DATABASES__RETRONOMICON_DB__URL \
     -e ROCKET_BASE_URL \
