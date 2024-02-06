@@ -86,10 +86,7 @@ impl World {
     async fn new() -> Self {
         // Relative to the root of the crate.
         let figment =
-            config::create_figment(&[relative!("tests/Rocket.test.toml").into()], "debug")
-                .unwrap()
-                // .merge(("log_level", "critical"))
-            ;
+            config::create_figment(&[relative!("tests/Rocket.test.toml").into()], "debug").unwrap();
 
         let secret_key = figment
             .find_value("secret_key")

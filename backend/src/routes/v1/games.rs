@@ -286,6 +286,9 @@ pub async fn games_images_upload(
         MultipartFormDataField::file("file")
             .size_limit(2.mebibytes().as_u64())
             .repetition(Repetition::infinite()),
+        MultipartFormDataField::file("image")
+            .size_limit(2.mebibytes().as_u64())
+            .repetition(Repetition::infinite()),
     ]);
     let multipart_form_data = MultipartFormData::parse(content_type, file, options)
         .await

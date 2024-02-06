@@ -37,8 +37,9 @@ pub struct GameListQueryParams<'v> {
 }
 
 /// Parameters for filtering the list of game images.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
+#[cfg_attr(feature = "rocket", derive(rocket::UriDisplayQuery))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GameImageListQueryParams {
     /// Paging parameters.

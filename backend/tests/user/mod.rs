@@ -10,8 +10,42 @@ use rocket::http::{Cookie, Method, Status};
 use rocket::local::asynchronous::Client;
 use rocket::uri;
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+
+fn create_image(text: String) -> Vec<u8> {
+    use embedded_graphics::framebuffer::{buffer_size, Framebuffer};
+    use embedded_graphics::mono_font::{ascii, MonoTextStyle};
+    use embedded_graphics::pixelcolor::raw::LittleEndian;
+    use embedded_graphics::pixelcolor::Rgb888;
+    use embedded_graphics::prelude::*;
+    use embedded_graphics::text::{Alignment, Text};
+
+    // Create an image.
+    let mut display =
+        Framebuffer::<Rgb888, _, LittleEndian, 320, 240, { buffer_size::<Rgb888>(320, 240) }>::new(
+        );
+
+    let character_style = MonoTextStyle::new(&ascii::FONT_10X20, Rgb888::new(255, 255, 255));
+    Text::with_alignment(
+        &text,
+        display.bounding_box().center() + Point::new(0, 0),
+        character_style,
+        Alignment::Center,
+    )
+    .draw(&mut display)
+    .expect("Could not draw text");
+
+    let image = image::RgbImage::from_raw(320, 240, display.data().to_vec())
+        .expect("Failed to create image");
+    let mut bytes: Vec<u8> = Vec::new();
+    image
+        .write_to(&mut Cursor::new(&mut bytes), image::ImageOutputFormat::Png)
+        .expect("Failed to write image.");
+
+    bytes
+}
 
 static mut COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -145,15 +179,15 @@ impl User {
     }
 
     fn create_email(domain: &str) -> String {
-        format!("{}@{}", Self::gen_string(20), domain)
+        format!("{}@{}", Self::gen_string(10), domain)
     }
 
     fn create_username(prefix: &str) -> String {
-        format!("{}_{}", prefix, Self::gen_string(10)).to_lowercase()
+        format!("{}_{}", prefix, Self::gen_string(5)).to_lowercase()
     }
 
     fn create_slug(prefix: &str) -> String {
-        slugify(&format!("{}-{}", prefix, Self::gen_string(10)))
+        slugify(&format!("{}-{}", prefix, Self::gen_string(5)))
     }
 
     pub async fn anonymous(client: Arc<Client>) -> Result<Self, Error> {
@@ -360,6 +394,20 @@ impl User {
             .await
     }
 
+    pub async fn get_game_images(
+        &mut self,
+        game_id: i32,
+    ) -> Result<Vec<dto::images::Image>, Error> {
+        self.get(
+            uri!(v1::games::games_images(
+                game_id as u32,
+                dto::games::GameImageListQueryParams::default()
+            )),
+            &(),
+        )
+        .await
+    }
+
     pub async fn get_user_details(
         &mut self,
         user: Option<UserIdOrUsername<'_>>,
@@ -368,5 +416,52 @@ impl User {
             Some(user) => self.get(uri!(v1::users::users_details(user)), &()).await,
             None => self.whoami().await,
         }
+    }
+
+    pub async fn upload_image(&mut self, game_id: i32, image_name: &str) -> Result<(), Error> {
+        let bytes = create_image(format!("{game_id} / {image_name}.png"));
+        let cookie = match self {
+            User::NoAuth { cookie, .. } | User::Auth { cookie, .. } => cookie.clone(),
+            User::Anonymous { .. } => Cookie::new("empty", ""),
+        };
+        let mut request = match self {
+            User::NoAuth { client, .. } | User::Auth { client, .. } => client,
+            User::Anonymous { client } => client,
+        }
+        .req(Method::Post, uri!(v1::games::games_images_upload(game_id)))
+        .cookie(cookie);
+
+        // Build the form manually. This is very cobbersome but Rocket doesn't provide a better
+        // API just yet. See https://github.com/rwf2/Rocket/issues/1591.
+        let form = [
+            b"-----testboundary\r\n".to_vec(),
+            format!(
+                "Content-Disposition: form-data; name=\"image\"; filename=\"{image_name}.png\"\r\n"
+            )
+            .as_bytes()
+            .to_vec(),
+            b"Content-Type: image/png\r\n".to_vec(),
+            b"\r\n".to_vec(),
+            bytes,
+            b"\r\n".to_vec(),
+            b"-----testboundary--\r\n".to_vec(),
+        ]
+        .concat();
+        request.add_header(rocket::http::Header::new(
+            "Content-Type",
+            "multipart/form-data; boundary=---testboundary",
+        ));
+        request.set_body(form);
+
+        let response = request.dispatch().await;
+        if response.status() != Status::Ok {
+            return Err(anyhow!(
+                "Server returned status: {} body: {:?}",
+                response.status(),
+                response.into_string().await
+            ));
+        }
+
+        Ok(())
     }
 }
