@@ -18,7 +18,7 @@ pub mod releases;
 pub async fn cores_list(
     mut db: Db,
     filter: dto::cores::CoreListQueryParams<'_>,
-) -> Result<Json<Vec<dto::cores::CoreListItem>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::cores::CoreListItem>>, (Status, String)> {
     let (page, limit) = filter
         .paging()
         .validate()
@@ -40,31 +40,30 @@ pub async fn cores_list(
         .release_date_ge
         .and_then(|release| chrono::NaiveDateTime::from_timestamp_opt(release, 0));
 
-    Ok(Json(
-        models::Core::list_with_teams_and_releases(
-            &mut db,
-            page,
-            limit,
-            platform.as_ref(),
-            system.as_ref(),
-            team.as_ref(),
-            release,
-        )
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .into_iter()
-        .map(
-            |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
+    let paginated = models::Core::list_with_teams_and_releases(
+        &mut db,
+        page,
+        limit,
+        platform.as_ref(),
+        system.as_ref(),
+        team.as_ref(),
+        release,
+    )
+    .await
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    Ok(
+        paginated.map_items(|(core, system, team, core_release, platform)| {
+            dto::cores::CoreListItem {
                 id: core.id,
                 slug: core.slug,
                 name: core.name,
                 owner_team: team.into(),
                 system: system.into(),
                 latest_release: core_release.map(|cr| cr.into_ref(platform)),
-            },
-        )
-        .collect(),
-    ))
+            }
+        }),
+    )
 }
 
 #[openapi(tag = "Cores", ignore = "db")]

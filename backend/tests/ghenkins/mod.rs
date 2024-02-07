@@ -11,9 +11,9 @@ impl FromStr for TeamRole {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.parse().map_err(
-            |e: dto::reexports::strum::ParseError| e.to_string(),
-        )?))
+        dto::types::UserTeamRole::from_str(s)
+            .map(Self)
+            .map_err(|e| e.to_string())
     }
 }
 

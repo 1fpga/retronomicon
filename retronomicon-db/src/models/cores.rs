@@ -1,7 +1,7 @@
-use crate::models::{Platform, System, Team};
 use crate::types::FromIdOrSlug;
 use crate::Db;
 use crate::{models, schema};
+use diesel::dsl::count_star;
 use diesel::prelude::*;
 use diesel::{AsExpression, FromSqlRow, Identifiable, Queryable};
 use retronomicon_dto as dto;
@@ -9,6 +9,7 @@ use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
 mod releases;
+use crate::pages::{Paginate, Paginated};
 pub use releases::*;
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -79,19 +80,18 @@ impl Core {
         db: &mut Db,
         page: i64,
         limit: i64,
-        platform: Option<&Platform>,
-        system: Option<&System>,
-        team: Option<&Team>,
+        platform: Option<&models::Platform>,
+        system: Option<&models::System>,
+        team: Option<&models::Team>,
         release_date_ge: Option<chrono::NaiveDateTime>,
-    ) -> Result<
-        Vec<(
+    ) -> QueryResult<
+        dto::Paginated<(
             Self,
             models::System,
             models::Team,
             Option<models::CoreRelease>,
             models::Platform,
         )>,
-        diesel::result::Error,
     > {
         let mut query = schema::cores::table
             .inner_join(schema::teams::table)
@@ -140,9 +140,8 @@ impl Core {
                 Option::<models::CoreRelease>::as_select(),
                 schema::platforms::all_columns,
             ))
-            .offset(page * limit)
-            .limit(limit)
-            .load::<(
+            .paginate(page, limit)
+            .load_and_count_total::<(
                 Self,
                 models::System,
                 models::Team,

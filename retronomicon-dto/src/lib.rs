@@ -1,3 +1,7 @@
+use serde::{Deserialize, Deserializer, Serializer};
+
+pub mod paging;
+
 pub mod encodings;
 pub mod error;
 pub mod params;
@@ -17,7 +21,6 @@ pub mod user;
 pub mod client;
 
 pub use client::routes;
-use serde::{Deserialize, Deserializer, Serializer};
 
 pub mod reexports {
     pub use strum;
@@ -47,12 +50,5 @@ impl<'de> Deserialize<'de> for Ok {
     }
 }
 
-/// A JWT authentication token.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct AuthTokenResponse {
-    /// The token itself.
-    pub token: String,
-}
-
 pub use error::JsonError;
+pub use paging::Paginated;

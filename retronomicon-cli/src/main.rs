@@ -1191,7 +1191,7 @@ async fn login(opts: &Opts, login_opts: &LoginOpts) -> Result<(), Error> {
     )
     .await?;
 
-    let response: dto::AuthTokenResponse =
+    let response: dto::auth::TokenResponse =
         send(&client, reqwest::Method::POST, "/api/v1/me/token", opts, ()).await?;
 
     println!("{}", response.token);

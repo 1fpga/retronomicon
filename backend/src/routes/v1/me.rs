@@ -46,8 +46,8 @@ pub async fn me(db: Db, user: UserGuard) -> Result<Json<dto::user::UserDetails>,
 pub async fn me_token(
     user: UserGuard,
     jwt_secret: &State<JwtKeys>,
-) -> Result<Json<dto::AuthTokenResponse>, (Status, String)> {
+) -> Result<Json<dto::auth::TokenResponse>, (Status, String)> {
     user.create_jwt(&jwt_secret.inner().encoding)
-        .map(|token| Json(dto::AuthTokenResponse { token }))
+        .map(|token| Json(dto::auth::TokenResponse { token }))
         .map_err(|e| (Status::Unauthorized, e.to_string()))
 }

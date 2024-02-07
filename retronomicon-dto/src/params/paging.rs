@@ -31,6 +31,19 @@ impl PagingParams {
         Self { page, limit }
     }
 
+    pub fn clamped(&self) -> (i64, i64) {
+        let page = self
+            .page
+            .map(|x| x.clamp(PAGE_MIN, PAGE_MAX))
+            .unwrap_or(PAGE_DEFAULT);
+        let limit = self
+            .limit
+            .map(|x| x.clamp(LIMIT_MIN, LIMIT_MAX))
+            .unwrap_or(LIMIT_DEFAULT);
+
+        (page, limit)
+    }
+
     pub fn validate(&self) -> Result<(i64, i64), String> {
         let page = self.page.unwrap_or(PAGE_DEFAULT);
         let limit = self.limit.unwrap_or(LIMIT_DEFAULT);
