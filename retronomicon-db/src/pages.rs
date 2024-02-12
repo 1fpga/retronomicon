@@ -1,22 +1,23 @@
-use diesel::pg::Pg;
-use diesel::prelude::*;
-use diesel::query_builder::*;
-use diesel::sql_types::BigInt;
-use retronomicon_dto as dto;
+use diesel::{pg::Pg, prelude::*, query_builder::*, sql_types::BigInt};
 use rocket_db_pools::diesel::methods::LoadQuery;
-use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
-use rocket_db_pools::Database;
+use rocket_db_pools::diesel::{AsyncPgConnection, RunQueryDsl};
+use std::future::Future;
+
+pub const DEFAULT_PER_PAGE: i64 = 10;
 
 pub trait Paginate: Sized {
-    fn paginate(self, page: i64, per_page: i64) -> Paginated<Self>;
+    fn paginate(self, page: Option<i64>) -> Paginated<Self>;
 }
 
 impl<T> Paginate for T {
-    fn paginate(self, page: i64, per_page: i64) -> Paginated<Self> {
+    fn paginate(self, page: Option<i64>) -> Paginated<Self> {
+        let page = page.unwrap_or(1);
+
         Paginated {
             query: self,
-            per_page,
+            per_page: DEFAULT_PER_PAGE,
             page,
+            offset: (page - 1) * DEFAULT_PER_PAGE,
         }
     }
 }
@@ -24,28 +25,37 @@ impl<T> Paginate for T {
 #[derive(Debug, Clone, Copy, QueryId)]
 pub struct Paginated<T> {
     query: T,
-    per_page: i64,
     page: i64,
+    offset: i64,
+    per_page: i64,
 }
 
 impl<T> Paginated<T> {
+    pub fn per_page(self, per_page: Option<i64>) -> Self {
+        let per_page = per_page.unwrap_or(DEFAULT_PER_PAGE);
+
+        Paginated {
+            per_page,
+            offset: (self.page - 1) * per_page,
+            ..self
+        }
+    }
+
     pub async fn load_and_count_total<'a, U>(
         self,
-        conn: &rocket_db_pools::Connection<impl Database>,
-    ) -> QueryResult<dto::Paginated<U>>
+        conn: &'a mut AsyncPgConnection,
+    ) -> QueryResult<(Vec<U>, i64)>
     where
-        Self: RunQueryDsl<PgConnection> + LoadQuery<'a, PgConnection, (U, i64)> + 'a,
+        Self: LoadQuery<'a, AsyncPgConnection, (U, i64)> + 'a,
+        U: Send + 'a,
+        T: 'a,
     {
-        let results = self.load::<(U, i64)>(conn).await?;
-        let total = results.first().map(|x| x.1).unwrap_or(0);
-        let records = results.into_iter().map(|x| x.0).collect();
-
-        Ok(dto::Paginated::new(
-            total as u64,
-            self.page as u64,
-            self.per_page as u64,
-            records,
-        ))
+        let results = self.load::<'_, '_, (U, i64)>(conn);
+        let results = results.await;
+        // let total = results.get(0).map(|x| x.1).unwrap_or(0);
+        // let records = results.into_iter().map(|x| x.0).collect();
+        // Ok((records, total))
+        Ok((vec![], 0))
     }
 }
 
@@ -63,7 +73,12 @@ where
         out.push_sql(") t LIMIT ");
         out.push_bind_param::<BigInt, _>(&self.per_page)?;
         out.push_sql(" OFFSET ");
-        out.push_bind_param::<BigInt, _>(&((self.page - 1) * self.per_page))?;
+        out.push_bind_param::<BigInt, _>(&self.offset)?;
         Ok(())
     }
+}
+
+pub struct PaginationOptions {
+    pub per_page: i64,
+    pub page: i64,
 }

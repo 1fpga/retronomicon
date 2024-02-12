@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 pub mod releases;
 
 /// Parameters for filtering the list of cores.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreListQueryParams<'v> {

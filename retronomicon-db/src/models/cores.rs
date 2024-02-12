@@ -76,13 +76,13 @@ impl Core {
             .await
     }
 
-    pub async fn list_with_teams_and_releases(
-        db: &mut Db,
+    pub async fn list_with_teams_and_releases<'a>(
+        db: &'a mut Db,
         page: i64,
         limit: i64,
-        platform: Option<&models::Platform>,
-        system: Option<&models::System>,
-        team: Option<&models::Team>,
+        platform: Option<&'a models::Platform>,
+        system: Option<&'a models::System>,
+        team: Option<&'a models::Team>,
         release_date_ge: Option<chrono::NaiveDateTime>,
     ) -> QueryResult<
         dto::Paginated<(
@@ -132,23 +132,39 @@ impl Core {
             query = query.filter(schema::core_releases::date_released.ge(release_date_ge));
         }
 
-        query
+        let result = query
             .select((
                 schema::cores::all_columns,
                 schema::systems::all_columns,
                 schema::teams::all_columns,
-                Option::<models::CoreRelease>::as_select(),
+                schema::core_releases::all_columns.nullable(),
                 schema::platforms::all_columns,
             ))
-            .paginate(page, limit)
+            // .load::<(
+            //     Self,
+            //     models::System,
+            //     models::Team,
+            //     Option<CoreRelease>,
+            //     models::Platform,
+            // )>(db)
+            .paginate(Some(page))
+            .per_page(Some(limit))
             .load_and_count_total::<(
                 Self,
                 models::System,
                 models::Team,
-                Option<models::CoreRelease>,
+                Option<CoreRelease>,
                 models::Platform,
             )>(db)
-            .await
+            .await?;
+
+        let (items, total) = (vec![], 0);
+        Ok(dto::Paginated::new(
+            total as u64,
+            page as u64,
+            limit as u64,
+            items,
+        ))
     }
 
     pub async fn create(

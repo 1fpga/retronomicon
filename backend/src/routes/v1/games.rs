@@ -61,8 +61,22 @@ pub async fn games_create(
 }
 
 #[openapi(tag = "Games", ignore = "db")]
-#[get("/games?<filter..>", format = "application/json", data = "<form>")]
+#[get("/games?<filter..>", format = "application/json")]
 pub async fn games_list(
+    db: Db,
+    filter: dto::games::GameListQueryParams<'_>,
+) -> Result<Json<Vec<dto::games::GameListItemResponse>>, (Status, String)> {
+    games_list_filter(db, filter, Json(dto::games::GameListBody::default())).await
+}
+
+#[openapi(tag = "Games", ignore = "db")]
+#[post(
+    "/games?<filter..>",
+    rank = 2,
+    format = "application/json",
+    data = "<form>"
+)]
+pub async fn games_list_filter(
     mut db: Db,
     filter: dto::games::GameListQueryParams<'_>,
     form: Json<dto::games::GameListBody>,

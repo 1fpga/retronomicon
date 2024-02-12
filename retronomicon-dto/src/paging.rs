@@ -38,15 +38,15 @@ impl<T> Paginated<T> {
     }
 
     pub fn map_items<'a, T2: Serialize + Deserialize<'a>>(
-        &self,
-        f: impl Fn(&T) -> T2,
+        self,
+        f: impl Fn(T) -> T2,
     ) -> Paginated<T2> {
         Paginated {
             total: self.total,
             page: self.page,
             per_page: self.per_page,
             page_count: self.page_count,
-            items: self.items.iter().map(f).collect(),
+            items: self.items.into_iter().map(f).collect(),
         }
     }
 }
