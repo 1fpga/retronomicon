@@ -40,7 +40,7 @@ pub async fn cores_list(
         .release_date_ge
         .and_then(|release| chrono::NaiveDateTime::from_timestamp_opt(release, 0));
 
-    let _paginated = models::Core::list_with_teams_and_releases(
+    let paginated = models::Core::list_with_teams_and_releases(
         &mut db,
         page,
         limit,
@@ -48,24 +48,20 @@ pub async fn cores_list(
         system.as_ref(),
         team.as_ref(),
         release,
-    );
+    )
+    .await
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
-    let x = _paginated.await;
-    // .await
-    // .map_err(|e| (Status::InternalServerError, e.to_string()))?;
-    let paginated = dto::Paginated::new(0, 0, 0, vec![]);
-
-    Ok(Json(
-        paginated, //.map_items(
-                  // |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
-                  //     id: core.id,
-                  //     slug: core.slug,
-                  //     name: core.name,
-                  //     owner_team: team.into(),
-                  //     system: system.into(),
-                  //     latest_release: core_release.map(|cr| cr.into_ref(platform)),
-                  // },
-    ))
+    Ok(Json(paginated.map_items(
+        |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
+            id: core.id,
+            slug: core.slug,
+            name: core.name,
+            owner_team: team.into(),
+            system: system.into(),
+            latest_release: core_release.map(|cr| cr.into_ref(platform)),
+        },
+    )))
 }
 
 #[openapi(tag = "Cores", ignore = "db")]

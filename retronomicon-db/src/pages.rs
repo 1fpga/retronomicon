@@ -1,7 +1,6 @@
 use diesel::{pg::Pg, prelude::*, query_builder::*, sql_types::BigInt};
 use rocket_db_pools::diesel::methods::LoadQuery;
 use rocket_db_pools::diesel::{AsyncPgConnection, RunQueryDsl};
-use std::future::Future;
 
 pub const DEFAULT_PER_PAGE: i64 = 10;
 
@@ -48,14 +47,15 @@ impl<T> Paginated<T> {
     where
         Self: LoadQuery<'a, AsyncPgConnection, (U, i64)> + 'a,
         U: Send + 'a,
-        T: 'a,
     {
-        let results = self.load::<'_, '_, (U, i64)>(conn);
-        let results = results.await;
-        // let total = results.get(0).map(|x| x.1).unwrap_or(0);
-        // let records = results.into_iter().map(|x| x.0).collect();
-        // Ok((records, total))
-        Ok((vec![], 0))
+        // Ignore those linting errors. `get(0)` cannot be replaced with `first()`.
+        #![allow(late_bound_lifetime_arguments)]
+        #![allow(clippy::get_first)]
+
+        let results = self.load::<'_, 'a, (U, i64)>(conn).await?;
+        let total = results.get(0).map(|x| x.1).unwrap_or(0);
+        let records = results.into_iter().map(|x| x.0).collect();
+        Ok((records, total))
     }
 }
 

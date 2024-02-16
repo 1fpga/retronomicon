@@ -89,7 +89,7 @@ impl Core {
             Self,
             models::System,
             models::Team,
-            Option<models::CoreRelease>,
+            Option<CoreRelease>,
             models::Platform,
         )>,
     > {
@@ -156,7 +156,9 @@ impl Core {
                 Option<CoreRelease>,
                 models::Platform,
             )>(db)
-            .await?;
+            // .load(db)
+            //.await?
+        ;
 
         let (items, total) = (vec![], 0);
         Ok(dto::Paginated::new(
