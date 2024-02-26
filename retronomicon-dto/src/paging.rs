@@ -49,4 +49,28 @@ impl<T> Paginated<T> {
             items: self.items.into_iter().map(f).collect(),
         }
     }
+
+    pub fn first(&self) -> Option<&T> {
+        self.items.first()
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<T> {
+        self.items.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn last(&self) -> Option<&T> {
+        self.items.last()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.items.get(index)
+    }
 }

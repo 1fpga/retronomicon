@@ -65,7 +65,7 @@ macro_rules! declare_client_impl {
             get cores(
                 ("cores"),
                 @query paging: &crate::params::PagingParams,
-            ) -> Vec<crate::cores::CoreListItem>;
+            ) -> crate::Paginated<crate::cores::CoreListItem>;
             get cores_details(
                 ("cores/{id}", id: &crate::types::IdOrSlug<'_>),
             ) -> crate::cores::CoreDetailsResponse;
@@ -103,7 +103,7 @@ macro_rules! declare_client_impl {
                 ("games"),
                 @query paging: &crate::games::GameListQueryParams<'_>,
                 @body filter: &crate::games::GameListBody,
-            ) -> Vec<crate::games::GameListItemResponse>;
+            ) -> crate::Paginated<crate::games::GameListItemResponse>;
             get games_details(
                 ("games/{id}", id: i32),
             ) -> crate::games::GameDetails;

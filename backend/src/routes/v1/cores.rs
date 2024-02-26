@@ -44,9 +44,9 @@ pub async fn cores_list(
         &mut db,
         page,
         limit,
-        platform.as_ref(),
-        system.as_ref(),
-        team.as_ref(),
+        platform.map(|p| p.id),
+        system.map(|s| s.id),
+        team.map(|t| t.id),
         release,
     )
     .await

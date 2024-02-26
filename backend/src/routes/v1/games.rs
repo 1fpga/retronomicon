@@ -65,7 +65,7 @@ pub async fn games_create(
 pub async fn games_list(
     db: Db,
     filter: dto::games::GameListQueryParams<'_>,
-) -> Result<Json<Vec<dto::games::GameListItemResponse>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::games::GameListItemResponse>>, (Status, String)> {
     games_list_filter(db, filter, Json(dto::games::GameListBody::default())).await
 }
 
@@ -80,7 +80,7 @@ pub async fn games_list_filter(
     mut db: Db,
     filter: dto::games::GameListQueryParams<'_>,
     form: Json<dto::games::GameListBody>,
-) -> Result<Json<Vec<dto::games::GameListItemResponse>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::games::GameListItemResponse>>, (Status, String)> {
     let (page, limit) = filter
         .paging
         .validate()
@@ -90,7 +90,6 @@ pub async fn games_list_filter(
     let name = filter.name.as_deref();
     let exact_name = filter.exact_name.as_deref();
 
-    let mut result = BTreeMap::new();
     let form = form.into_inner();
     let md5 = form
         .md5
@@ -111,7 +110,7 @@ pub async fn games_list_filter(
         .map(|m| m.into())
         .collect();
 
-    for (g, s, a) in models::Game::list(
+    let p = models::Game::list(
         &mut db,
         page,
         limit,
@@ -124,26 +123,40 @@ pub async fn games_list_filter(
         sha256,
     )
     .await
-    .map_err(|e| (Status::InternalServerError, e.to_string()))?
-    .into_iter()
-    {
-        let entry = result
-            .entry(g.id)
-            .or_insert_with(|| dto::games::GameListItemResponse {
-                id: g.id,
-                name: g.name,
-                short_description: g.short_description,
-                year: g.year,
-                system_id: s.into(),
-                system_unique_id: g.system_unique_id,
-                artifacts: vec![],
-            });
-        if let Some(a) = a {
-            entry.artifacts.push(a.into());
-        }
-    }
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
-    Ok(Json(result.into_values().collect::<Vec<_>>()))
+    let dto::Paginated {
+        total,
+        page,
+        per_page,
+        items,
+        ..
+    } = p;
+
+    let items = items
+        .into_iter()
+        .fold(BTreeMap::new(), |mut acc, (g, s, a)| {
+            let entry = acc
+                .entry(g.id)
+                .or_insert_with(|| dto::games::GameListItemResponse {
+                    id: g.id,
+                    name: g.name,
+                    short_description: g.short_description,
+                    year: g.year,
+                    system_id: s.into(),
+                    system_unique_id: g.system_unique_id,
+                    artifacts: vec![],
+                });
+
+            if let Some(a) = a {
+                entry.artifacts.push(a.into());
+            }
+
+            acc
+        });
+
+    let items = items.into_values().collect::<Vec<_>>();
+    Ok(Json(dto::Paginated::new(total, page, per_page, items)))
 }
 
 #[openapi(tag = "Games", ignore = "db")]

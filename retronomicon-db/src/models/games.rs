@@ -1,9 +1,11 @@
 use crate::models::{Artifact, System};
+use crate::pages::Paginate;
 use crate::Db;
 use crate::{models, schema};
 use diesel::deserialize::FromSql;
 use diesel::prelude::*;
 use diesel::{AsExpression, FromSqlRow};
+use retronomicon_dto as dto;
 use retronomicon_dto::artifact::ArtifactRef;
 use retronomicon_dto::types::IdOrSlug;
 use rocket::http::Status;
@@ -97,7 +99,7 @@ impl Game {
         md5: Vec<Vec<u8>>,
         sha1: Vec<Vec<u8>>,
         sha256: Vec<Vec<u8>>,
-    ) -> Result<Vec<(Self, System, Option<Artifact>)>, diesel::result::Error> {
+    ) -> Result<dto::Paginated<(Self, System, Option<Artifact>)>, diesel::result::Error> {
         use schema::games::dsl;
 
         let mut query = schema::games::table
@@ -150,17 +152,23 @@ impl Game {
             query = query.filter((schema::artifacts::dsl::sha256).eq_any(sha256));
         }
 
-        query
-            .order_by(dsl::name.asc())
-            .offset(page * limit)
-            .limit(limit)
+        let (items, total) = query
             .select((
                 schema::games::all_columns,
                 schema::systems::all_columns,
-                Option::<Artifact>::as_select(),
+                schema::artifacts::all_columns.nullable(),
             ))
-            .load(db)
-            .await
+            .paginate(Some(page))
+            .per_page(Some(limit))
+            .load_and_count_total(db)
+            .await?;
+
+        Ok(dto::Paginated::new(
+            total as u64,
+            page as u64,
+            limit as u64,
+            items,
+        ))
     }
 
     pub async fn find_by_sha256(

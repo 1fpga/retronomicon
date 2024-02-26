@@ -16,7 +16,7 @@ impl<T> Paginate for T {
             query: self,
             per_page: DEFAULT_PER_PAGE,
             page,
-            offset: (page - 1) * DEFAULT_PER_PAGE,
+            offset: page * DEFAULT_PER_PAGE,
         }
     }
 }
@@ -35,7 +35,7 @@ impl<T> Paginated<T> {
 
         Paginated {
             per_page,
-            offset: (self.page - 1) * per_page,
+            offset: self.page * per_page,
             ..self
         }
     }
@@ -45,14 +45,14 @@ impl<T> Paginated<T> {
         conn: &'a mut AsyncPgConnection,
     ) -> QueryResult<(Vec<U>, i64)>
     where
-        Self: LoadQuery<'a, AsyncPgConnection, (U, i64)> + 'a,
-        U: Send + 'a,
+        Self: LoadQuery<'a, AsyncPgConnection, (U, i64)>,
+        U: Send,
+        T: 'a,
     {
         // Ignore those linting errors. `get(0)` cannot be replaced with `first()`.
-        #![allow(late_bound_lifetime_arguments)]
         #![allow(clippy::get_first)]
 
-        let results = self.load::<'_, 'a, (U, i64)>(conn).await?;
+        let results = self.load::<(U, i64)>(conn).await?;
         let total = results.get(0).map(|x| x.1).unwrap_or(0);
         let records = results.into_iter().map(|x| x.0).collect();
         Ok((records, total))
