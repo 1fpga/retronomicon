@@ -3,7 +3,10 @@ use crate::pages::Paginate;
 use crate::Db;
 use crate::{models, schema};
 use diesel::deserialize::FromSql;
+use diesel::dsl::sql;
 use diesel::prelude::*;
+use diesel::query_builder::BoxedSelectStatement;
+use diesel::sql_types::Bool;
 use diesel::{AsExpression, FromSqlRow};
 use retronomicon_dto as dto;
 use retronomicon_dto::artifact::ArtifactRef;
@@ -15,6 +18,19 @@ use serde_json::{Value as Json, Value};
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::ops::Bound;
+
+#[derive(AsChangeset)]
+#[diesel(table_name = schema::games)]
+struct UpdateChangeset<'a> {
+    name: Option<&'a str>,
+    description: Option<&'a str>,
+    short_description: Option<&'a str>,
+    year: Option<i32>,
+    publisher: Option<&'a str>,
+    developer: Option<&'a str>,
+    links: Option<Json>,
+    system_unique_id: Option<i32>,
+}
 
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(table_name = schema::games)]
@@ -88,21 +104,21 @@ impl Game {
             .await
     }
 
-    pub async fn list(
+    pub async fn list<'a>(
         db: &mut Db,
         page: i64,
         limit: i64,
         system: Option<IdOrSlug<'_>>,
         year: (Bound<i32>, Bound<i32>),
-        name: Option<&str>,
-        exact_name: Option<&str>,
+        name: Option<&'a str>,
+        exact_name: Option<&'a str>,
         md5: Vec<Vec<u8>>,
         sha1: Vec<Vec<u8>>,
         sha256: Vec<Vec<u8>>,
-    ) -> Result<dto::Paginated<(Self, System, Option<Artifact>)>, diesel::result::Error> {
+    ) -> Result<(Vec<(Self, System, Option<Artifact>)>, i64), diesel::result::Error> {
         use schema::games::dsl;
 
-        let mut query = schema::games::table
+        let mut query: BoxedSelectStatement<'a, _, _, _, _> = schema::games::table
             .inner_join(schema::systems::table)
             .left_join(
                 schema::game_artifacts::table.inner_join(
@@ -110,14 +126,22 @@ impl Game {
                         .on(schema::artifacts::id.eq(schema::game_artifacts::artifact_id)),
                 ),
             )
+            .select((
+                schema::games::all_columns,
+                schema::systems::all_columns,
+                schema::artifacts::all_columns.nullable(),
+            ))
             .into_boxed();
 
-        if let Some(system) = system {
-            if let Some(system_id) = system.as_id() {
-                query = query.filter(dsl::system_id.eq(system_id));
-            } else if let Some(system_slug) = system.as_slug() {
-                query = query.filter(schema::systems::dsl::slug.eq(system_slug.to_string()));
+        match system {
+            Some(IdOrSlug::Id(id)) => {
+                query = query.filter(dsl::system_id.eq(id));
             }
+            Some(IdOrSlug::Slug(slug)) => {
+                let slug = slug.to_string();
+                query = query.filter(schema::systems::dsl::slug.eq(slug));
+            }
+            None => {}
         }
 
         query = match year {
@@ -139,7 +163,7 @@ impl Game {
         }
 
         if let Some(name) = exact_name {
-            query = query.filter(dsl::name.eq(name));
+            query = query.filter(dsl::name.eq(name.to_string()));
         }
 
         if !md5.is_empty() {
@@ -152,23 +176,11 @@ impl Game {
             query = query.filter((schema::artifacts::dsl::sha256).eq_any(sha256));
         }
 
-        let (items, total) = query
-            .select((
-                schema::games::all_columns,
-                schema::systems::all_columns,
-                schema::artifacts::all_columns.nullable(),
-            ))
-            .paginate(Some(page))
-            .per_page(Some(limit))
+        query
+            .paginate(page)
+            .per_page(limit)
             .load_and_count_total(db)
-            .await?;
-
-        Ok(dto::Paginated::new(
-            total as u64,
-            page as u64,
-            limit as u64,
-            items,
-        ))
+            .await
     }
 
     pub async fn find_by_sha256(
@@ -273,19 +285,6 @@ impl Game {
         remove_links: Option<Vec<&'_ str>>,
         system_unique_id: Option<i32>,
     ) -> Result<(), diesel::result::Error> {
-        #[derive(AsChangeset)]
-        #[diesel(table_name = schema::games)]
-        struct UpdateChangeset<'a> {
-            name: Option<&'a str>,
-            description: Option<&'a str>,
-            short_description: Option<&'a str>,
-            year: Option<i32>,
-            publisher: Option<&'a str>,
-            developer: Option<&'a str>,
-            links: Option<Json>,
-            system_unique_id: Option<i32>,
-        }
-
         db.transaction(|db| {
             async move {
                 let mut changeset = UpdateChangeset {

@@ -5,7 +5,6 @@ use diesel::dsl::count_star;
 use diesel::prelude::*;
 use diesel::query_builder::BoxedSelectStatement;
 use diesel::{AsExpression, FromSqlRow, Identifiable, Queryable};
-use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
@@ -86,71 +85,19 @@ impl Core {
         team: Option<i32>,
         release_date_ge: Option<chrono::NaiveDateTime>,
     ) -> Result<
-        dto::Paginated<(
-            Self,
-            models::System,
-            models::Team,
-            Option<CoreRelease>,
-            models::Platform,
-        )>,
+        (
+            Vec<(
+                Self,
+                models::System,
+                models::Team,
+                Option<CoreRelease>,
+                models::Platform,
+            )>,
+            i64,
+        ),
         String,
     > {
-        use diesel::dsl::sql;
-        use diesel::sql_types::{Bool, Integer, Nullable};
-
-        // This is a bit of a mess, but it's the best we can do with Diesel.
-        // The problem is that using the Paginate class with `into_boxed()` seems
-        // to confuse the borrow checker and it returns a
-        // `higher-ranked lifetime error`. This is a workaround where we manually
-        // build the query.
-        let condition = sql::<Bool>("true")
-            .and(
-                (schema::platforms::id
-                    .nullable()
-                    .eq(platform)
-                    .or(schema::platforms::id.is_null())),
-            )
-            .and(
-                schema::systems::id
-                    .nullable()
-                    .eq(system)
-                    .or(schema::systems::id.is_null()),
-            )
-            .and(
-                schema::teams::id
-                    .nullable()
-                    .eq(team)
-                    .or(schema::teams::id.is_null()),
-            )
-            .and(
-                schema::core_releases::date_released
-                    .nullable()
-                    .ge(release_date_ge)
-                    .or(schema::core_releases::date_released.is_null()),
-            );
-        // let condition = sql::<Bool>("true")
-        //     .sql(" AND (platforms.id = ")
-        //     .bind::<Nullable<Integer>, _>(platform)
-        //     .sql(" OR ")
-        //     .bind::<Nullable<Integer>, _>(platform)
-        //     .sql(" IS NULL)")
-        //     .sql(" AND (systems.id = ")
-        //     .bind::<Nullable<Integer>, _>(system)
-        //     .sql(" OR ")
-        //     .bind::<Nullable<Integer>, _>(system)
-        //     .sql(" IS NULL)")
-        //     .sql(" AND (teams.id = ")
-        //     .bind::<Nullable<Integer>, _>(team)
-        //     .sql(" OR ")
-        //     .bind::<Nullable<Integer>, _>(team)
-        //     .sql(" IS NULL)")
-        //     .sql(" AND (core_releases.date_released >= ")
-        //     .bind::<Nullable<diesel::sql_types::Timestamp>, _>(release_date_ge)
-        //     .sql(" OR ")
-        //     .bind::<Nullable<diesel::sql_types::Timestamp>, _>(release_date_ge)
-        //     .sql(" IS NULL)");
-
-        let (items, total) = schema::cores::table
+        let mut query = schema::cores::table
             .inner_join(schema::teams::table)
             .left_join(
                 schema::core_releases::table.on(schema::core_releases::id.eq(
@@ -178,10 +125,25 @@ impl Core {
                 schema::core_releases::all_columns.nullable(),
                 schema::platforms::all_columns,
             ))
-            .filter(condition)
-            .paginate(Some(page))
-            .per_page(Some(limit))
-            .load_and_count_total::<'a, (
+            .into_boxed();
+
+        if let Some(platform) = platform {
+            query = query.filter(schema::platforms::id.eq(platform));
+        }
+        if let Some(system) = system {
+            query = query.filter(schema::systems::id.eq(system));
+        }
+        if let Some(team) = team {
+            query = query.filter(schema::teams::id.eq(team));
+        }
+        if let Some(release_date_ge) = release_date_ge {
+            query = query.filter(schema::core_releases::date_released.ge(release_date_ge));
+        }
+
+        query
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<(
                 Self,
                 models::System,
                 models::Team,
@@ -189,14 +151,7 @@ impl Core {
                 models::Platform,
             )>(db)
             .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(dto::Paginated::new(
-            total as u64,
-            page as u64,
-            limit as u64,
-            items,
-        ))
+            .map_err(|e| e.to_string())
     }
 
     pub async fn create(
@@ -226,22 +181,25 @@ impl Core {
 
     pub async fn get_with_owner_and_system(
         db: &mut Db,
-        id: dto::types::IdOrSlug<'_>,
+        id: i32,
     ) -> Result<Option<(Self, models::Team, models::System)>, diesel::result::Error> {
-        let mut query = schema::cores::table
+        schema::cores::table
             .inner_join(schema::teams::table)
             .inner_join(schema::systems::table)
-            .into_boxed();
+            .filter(schema::cores::id.eq(id))
+            .first::<(Self, models::Team, models::System)>(db)
+            .await
+            .optional()
+    }
 
-        if let Some(id) = id.as_id() {
-            query = query.filter(schema::cores::id.eq(id));
-        } else if let Some(slug) = id.as_slug() {
-            query = query.filter(schema::cores::slug.eq(slug));
-        } else {
-            return Ok(None);
-        }
-
-        query
+    pub async fn get_by_slug_with_owner_and_system(
+        db: &mut Db,
+        slug: &str,
+    ) -> Result<Option<(Self, models::Team, models::System)>, diesel::result::Error> {
+        schema::cores::table
+            .inner_join(schema::teams::table)
+            .inner_join(schema::systems::table)
+            .filter(schema::cores::slug.eq(slug))
             .first::<(Self, models::Team, models::System)>(db)
             .await
             .optional()

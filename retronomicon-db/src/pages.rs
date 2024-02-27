@@ -1,17 +1,15 @@
-use diesel::{pg::Pg, prelude::*, query_builder::*, sql_types::BigInt};
+use diesel::pg::Pg;
 use rocket_db_pools::diesel::methods::LoadQuery;
-use rocket_db_pools::diesel::{AsyncPgConnection, RunQueryDsl};
+use rocket_db_pools::diesel::{prelude::*, query_builder::*, sql_types::BigInt, AsyncPgConnection};
 
 pub const DEFAULT_PER_PAGE: i64 = 10;
 
 pub trait Paginate: Sized {
-    fn paginate(self, page: Option<i64>) -> Paginated<Self>;
+    fn paginate(self, page: i64) -> Paginated<Self>;
 }
 
-impl<T> Paginate for T {
-    fn paginate(self, page: Option<i64>) -> Paginated<Self> {
-        let page = page.unwrap_or(1);
-
+impl<T: Query> Paginate for T {
+    fn paginate(self, page: i64) -> Paginated<Self> {
         Paginated {
             query: self,
             per_page: DEFAULT_PER_PAGE,
@@ -30,32 +28,39 @@ pub struct Paginated<T> {
 }
 
 impl<T> Paginated<T> {
-    pub fn per_page(self, per_page: Option<i64>) -> Self {
-        let per_page = per_page.unwrap_or(DEFAULT_PER_PAGE);
-
+    pub fn per_page(self, per_page: i64) -> Self {
         Paginated {
             per_page,
             offset: self.page * per_page,
             ..self
         }
     }
+}
 
-    pub async fn load_and_count_total<'a, U>(
+impl<T> Paginated<T> {
+    // We manually "type" the Future instead of declaring this method as async because the
+    // lifetime of the returned Future is tied to the lifetime of the connection and need
+    // to be Send, and the compiler cannot infer that by itself.
+    pub fn load_and_count_total<'a, U>(
         self,
         conn: &'a mut AsyncPgConnection,
-    ) -> QueryResult<(Vec<U>, i64)>
+    ) -> impl std::future::Future<Output = QueryResult<(Vec<U>, i64)>> + Send + 'a
     where
-        Self: LoadQuery<'a, AsyncPgConnection, (U, i64)>,
-        U: Send,
+        Self: LoadQuery<'a, AsyncPgConnection, (U, i64)> + 'a,
+        U: Send + 'a,
         T: 'a,
     {
         // Ignore those linting errors. `get(0)` cannot be replaced with `first()`.
         #![allow(clippy::get_first)]
 
-        let results = self.load::<(U, i64)>(conn).await?;
-        let total = results.get(0).map(|x| x.1).unwrap_or(0);
-        let records = results.into_iter().map(|x| x.0).collect();
-        Ok((records, total))
+        let results = self.get_results::<(U, i64)>(conn);
+
+        async move {
+            let results = results.await?;
+            let total = results.get(0).map(|x| x.1).unwrap_or(0);
+            let records = results.into_iter().map(|x| x.0).collect();
+            Ok((records, total))
+        }
     }
 }
 
@@ -76,9 +81,4 @@ where
         out.push_bind_param::<BigInt, _>(&self.offset)?;
         Ok(())
     }
-}
-
-pub struct PaginationOptions {
-    pub per_page: i64,
-    pub page: i64,
 }

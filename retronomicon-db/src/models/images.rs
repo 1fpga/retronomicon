@@ -1,5 +1,6 @@
 use crate::db::Db;
 use crate::models::{Artifact, CoreRelease, Game, System};
+use crate::pages::Paginate;
 use crate::{models, schema};
 use diesel::deserialize::FromSql;
 use diesel::prelude::*;
@@ -65,14 +66,14 @@ impl GameImage {
         page: i64,
         limit: i64,
         game_id: i32,
-    ) -> Result<Vec<(Self, Game)>, diesel::result::Error> {
+    ) -> Result<(Vec<(Self, Game)>, i64), diesel::result::Error> {
         schema::game_images::table
             .inner_join(schema::games::table)
             .filter(schema::game_images::game_id.eq(game_id))
             .order(schema::game_images::image_name.asc())
-            .offset(page * limit)
-            .limit(limit)
-            .load::<(Self, Game)>(db)
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<(Self, Game)>(db)
             .await
     }
 }

@@ -46,7 +46,7 @@ pub async fn platforms_details(
 }
 
 #[openapi(tag = "Platforms", ignore = "db")]
-#[post("/platforms", format = "application/json", data = "<form>")]
+#[post("/platforms/new", format = "application/json", data = "<form>")]
 pub async fn platforms_create(
     mut db: Db,
     user: guards::users::AuthenticatedUserGuard,

@@ -8,6 +8,17 @@ use retronomicon_dto::types::IdOrSlug;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::value::Value as Json;
 
+#[derive(AsChangeset)]
+#[diesel(table_name = schema::platforms)]
+struct Update<'a> {
+    slug: Option<&'a str>,
+    name: Option<&'a str>,
+    description: Option<&'a str>,
+    links: Option<Json>,
+    metadata: Option<Json>,
+    owner_team_id: Option<i32>,
+}
+
 #[derive(Queryable, Debug, Identifiable)]
 #[diesel(table_name = schema::platforms)]
 pub struct Platform {
@@ -130,17 +141,6 @@ impl Platform {
         metadata: Option<Json>,
         owner_team_id: Option<i32>,
     ) -> Result<(), diesel::result::Error> {
-        #[derive(AsChangeset)]
-        #[diesel(table_name = schema::platforms)]
-        struct Update<'a> {
-            slug: Option<&'a str>,
-            name: Option<&'a str>,
-            description: Option<&'a str>,
-            links: Option<Json>,
-            metadata: Option<Json>,
-            owner_team_id: Option<i32>,
-        }
-
         diesel::update(schema::platforms::table)
             .filter(schema::platforms::id.eq(id))
             .set(&Update {

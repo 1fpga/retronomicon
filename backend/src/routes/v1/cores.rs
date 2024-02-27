@@ -14,13 +14,14 @@ pub mod releases;
 
 /// List cores.
 #[openapi(tag = "Cores", ignore = "db")]
-#[get("/cores?<filter..>")]
+#[get("/cores?<page>&<limit>&<filter..>")]
 pub async fn cores_list(
     mut db: Db,
     filter: dto::cores::CoreListQueryParams<'_>,
+    page: Option<i64>,
+    limit: Option<i64>,
 ) -> Result<Json<dto::Paginated<dto::cores::CoreListItem>>, (Status, String)> {
-    let (page, limit) = filter
-        .paging()
+    let (page, limit) = dto::params::PagingParams::new(page, limit)
         .validate()
         .map_err(|e| (Status::BadRequest, e))?;
 
@@ -40,7 +41,7 @@ pub async fn cores_list(
         .release_date_ge
         .and_then(|release| chrono::NaiveDateTime::from_timestamp_opt(release, 0));
 
-    let paginated = models::Core::list_with_teams_and_releases(
+    let (items, total) = models::Core::list_with_teams_and_releases(
         &mut db,
         page,
         limit,
@@ -52,16 +53,26 @@ pub async fn cores_list(
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
 
-    Ok(Json(paginated.map_items(
-        |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
-            id: core.id,
-            slug: core.slug,
-            name: core.name,
-            owner_team: team.into(),
-            system: system.into(),
-            latest_release: core_release.map(|cr| cr.into_ref(platform)),
-        },
-    )))
+    let paginated = dto::Paginated::new(
+        page,
+        limit,
+        total,
+        items
+            .into_iter()
+            .map(
+                |(core, system, team, core_release, platform)| dto::cores::CoreListItem {
+                    id: core.id,
+                    slug: core.slug,
+                    name: core.name,
+                    owner_team: team.into(),
+                    system: system.into(),
+                    latest_release: core_release.map(|cr| cr.into_ref(platform)),
+                },
+            )
+            .collect(),
+    );
+
+    Ok(Json(paginated))
 }
 
 #[openapi(tag = "Cores", ignore = "db")]
@@ -70,10 +81,14 @@ pub async fn cores_details(
     mut db: Db,
     core_id: dto::types::IdOrSlug<'_>,
 ) -> Result<Json<dto::cores::CoreDetailsResponse>, (Status, String)> {
-    let (core, owner_team, system) = models::Core::get_with_owner_and_system(&mut db, core_id)
-        .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .ok_or((Status::NotFound, "Core not found".to_string()))?;
+    let (core, owner_team, system) = match core_id {
+        dto::types::IdOrSlug::Id(id) => models::Core::get_with_owner_and_system(&mut db, id).await,
+        dto::types::IdOrSlug::Slug(slug) => {
+            models::Core::get_by_slug_with_owner_and_system(&mut db, &slug).await
+        }
+    }
+    .map_err(|e| (Status::InternalServerError, e.to_string()))?
+    .ok_or((Status::NotFound, "Core not found".to_string()))?;
 
     Ok(Json(dto::cores::CoreDetailsResponse {
         id: core.id,
@@ -90,7 +105,7 @@ pub async fn cores_details(
 }
 
 #[openapi(tag = "Cores", ignore = "db")]
-#[post("/cores", format = "application/json", data = "<form>")]
+#[post("/cores/new", format = "application/json", data = "<form>")]
 pub async fn cores_create(
     mut db: Db,
     user: guards::users::AuthenticatedUserGuard,

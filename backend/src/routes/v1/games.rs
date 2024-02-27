@@ -20,7 +20,7 @@ const MAX_IMAGE_WIDTH: u32 = 4096;
 const MAX_IMAGE_HEIGHT: u32 = 4096;
 
 #[openapi(tag = "Games", ignore = "db")]
-#[post("/games", format = "application/json", data = "<form>")]
+#[post("/games/new", format = "application/json", data = "<form>")]
 pub async fn games_create(
     mut db: Db,
     _root_user: guards::users::RootUserGuard,
@@ -61,28 +61,38 @@ pub async fn games_create(
 }
 
 #[openapi(tag = "Games", ignore = "db")]
-#[get("/games?<filter..>", format = "application/json")]
+#[get("/games?<page>&<limit>&<filter..>", format = "application/json")]
 pub async fn games_list(
     db: Db,
     filter: dto::games::GameListQueryParams<'_>,
+    page: Option<i64>,
+    limit: Option<i64>,
 ) -> Result<Json<dto::Paginated<dto::games::GameListItemResponse>>, (Status, String)> {
-    games_list_filter(db, filter, Json(dto::games::GameListBody::default())).await
+    games_list_extended(
+        db,
+        filter,
+        page,
+        limit,
+        Json(dto::games::GameListBody::default()),
+    )
+    .await
 }
 
 #[openapi(tag = "Games", ignore = "db")]
 #[post(
-    "/games?<filter..>",
+    "/games?<page>&<limit>&<filter..>",
     rank = 2,
     format = "application/json",
     data = "<form>"
 )]
-pub async fn games_list_filter(
+pub async fn games_list_extended(
     mut db: Db,
     filter: dto::games::GameListQueryParams<'_>,
+    page: Option<i64>,
+    limit: Option<i64>,
     form: Json<dto::games::GameListBody>,
 ) -> Result<Json<dto::Paginated<dto::games::GameListItemResponse>>, (Status, String)> {
-    let (page, limit) = filter
-        .paging
+    let (page, limit) = dto::params::PagingParams::new(page, limit)
         .validate()
         .map_err(|e| (Status::BadRequest, e))?;
 
@@ -110,7 +120,7 @@ pub async fn games_list_filter(
         .map(|m| m.into())
         .collect();
 
-    let p = models::Game::list(
+    let (items, total) = models::Game::list(
         &mut db,
         page,
         limit,
@@ -124,14 +134,6 @@ pub async fn games_list_filter(
     )
     .await
     .map_err(|e| (Status::InternalServerError, e.to_string()))?;
-
-    let dto::Paginated {
-        total,
-        page,
-        per_page,
-        items,
-        ..
-    } = p;
 
     let items = items
         .into_iter()
@@ -156,7 +158,7 @@ pub async fn games_list_filter(
         });
 
     let items = items.into_values().collect::<Vec<_>>();
-    Ok(Json(dto::Paginated::new(total, page, per_page, items)))
+    Ok(Json(dto::Paginated::new(page, limit, total, items)))
 }
 
 #[openapi(tag = "Games", ignore = "db")]
@@ -250,30 +252,34 @@ pub async fn games_add_artifact(
 }
 
 #[openapi(tag = "Games", ignore = "db")]
-#[get("/games/<game_id>/images?<filter..>")]
+#[get("/games/<game_id>/images?<paging..>")]
 pub async fn games_images(
     mut db: Db,
     game_id: u32,
-    filter: dto::games::GameImageListQueryParams,
-) -> Result<Json<Vec<dto::images::Image>>, (Status, String)> {
+    paging: dto::params::PagingParams,
+) -> Result<Json<dto::Paginated<dto::images::Image>>, (Status, String)> {
     let game_id = game_id as i32;
-    let (page, limit) = filter
-        .paging
-        .validate()
-        .map_err(|e| (Status::BadRequest, e))?;
-    let images = models::GameImage::list(&mut db, page, limit, game_id)
+    let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
+    let (items, total) = models::GameImage::list(&mut db, page, limit, game_id)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))?
-        .into_iter()
-        .map(|(i, _)| {
-            Ok(dto::images::Image {
-                name: i.image_name,
-                url: i.url,
-                mime_type: i.mime_type,
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    let images = dto::Paginated::new(
+        page,
+        limit,
+        total,
+        items
+            .into_iter()
+            .map(|(i, _)| {
+                Ok(dto::images::Image {
+                    name: i.image_name,
+                    url: i.url,
+                    mime_type: i.mime_type,
+                })
             })
-        })
-        .collect::<Result<Vec<_>, String>>()
-        .map_err(|e| (Status::InternalServerError, e))?;
+            .collect::<Result<Vec<_>, String>>()
+            .map_err(|e| (Status::InternalServerError, e))?,
+    );
 
     Ok(Json(images))
 }
@@ -283,7 +289,7 @@ pub async fn games_images(
 /// The upload will be refused if the user does not have permission to
 /// upload images to this game.
 #[openapi(tag = "Games", ignore = "config", ignore = "db", ignore = "storage")]
-#[post("/games/<game_id>/images", data = "<file>")]
+#[post("/games/<game_id>/images/new", data = "<file>")]
 pub async fn games_images_upload(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,

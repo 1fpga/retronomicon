@@ -49,7 +49,7 @@ macro_rules! declare_client_impl {
             get users(
                 ("users"),
                 @query paging: &crate::params::PagingParams,
-            ) -> Vec<crate::user::UserRef>;
+            ) -> crate::Paginated<crate::user::UserRef>;
             get users_details(
                 ("users/{id}", id: &crate::user::UserIdOrUsername<'_>),
             ) -> crate::user::UserDetails;
@@ -70,14 +70,14 @@ macro_rules! declare_client_impl {
                 ("cores/{id}", id: &crate::types::IdOrSlug<'_>),
             ) -> crate::cores::CoreDetailsResponse;
             post cores_create(
-                ("cores"),
+                ("cores/new"),
                 @body body: &crate::cores::CoreCreateRequest<'_>,
             ) -> crate::cores::CoreCreateResponse;
 
             get cores_releases(
                 ("cores/{id}/releases", id: &crate::types::IdOrSlug<'_>),
                 @query paging: &crate::params::PagingParams,
-            ) -> Vec<crate::cores::releases::CoreReleaseListItem>;
+            ) -> crate::Paginated<crate::cores::releases::CoreReleaseListItem>;
             get cores_releases_artifacts(
                 (
                     "cores/{core_id}/releases/{release_id}/artifacts",
@@ -85,14 +85,14 @@ macro_rules! declare_client_impl {
                     release_id: i32,
                 ),
                 @query paging: &crate::params::PagingParams,
-            ) -> Vec<crate::artifact::CoreReleaseArtifactListItem>;
+            ) -> crate::Paginated<crate::artifact::CoreReleaseArtifactListItem>;
             post cores_releases_create(
-                ("cores/{id}/releases", id: &crate::types::IdOrSlug<'_>),
+                ("cores/{id}/releases/new", id: &crate::types::IdOrSlug<'_>),
                 @body body: &crate::cores::releases::CoreReleaseCreateRequest<'_>,
             ) -> crate::cores::releases::CoreReleaseCreateResponse;
             post cores_releases_artifacts_upload(
                 (
-                    "cores/{core_id}/releases/{release_id}/artifacts",
+                    "cores/{core_id}/releases/{release_id}/artifacts/new",
                     core_id: &crate::types::IdOrSlug<'_>,
                     release_id: i32,
                 ),
@@ -101,14 +101,15 @@ macro_rules! declare_client_impl {
 
             get games(
                 ("games"),
-                @query paging: &crate::games::GameListQueryParams<'_>,
+                @query query: &crate::games::GameListQueryParams<'_>,
+                @query page: &crate::params::PagingParams,
                 @body filter: &crate::games::GameListBody,
             ) -> crate::Paginated<crate::games::GameListItemResponse>;
             get games_details(
                 ("games/{id}", id: i32),
             ) -> crate::games::GameDetails;
             post games_create(
-                ("games"),
+                ("games/new"),
                 @body body: &crate::games::GameCreateRequest<'_>,
             ) -> crate::games::GameCreateResponse;
             put games_update(
@@ -116,15 +117,15 @@ macro_rules! declare_client_impl {
                 @body body: &crate::games::GameUpdateRequest<'_>,
             ) -> crate::Ok;
             post games_add_artifact(
-                ("games/{id}/artifacts", id: i32),
+                ("games/{id}/artifacts/new", id: i32),
                 @body body: &Vec<crate::games::GameAddArtifactRequest<'_>>,
             ) -> crate::Ok;
             get games_images(
                 ("games/{id}/images", id: i32),
                 @query paging: &crate::params::PagingParams,
-            ) -> Vec<crate::images::Image>;
+            ) -> crate::Paginated<crate::images::Image>;
             post games_add_image(
-                ("games/{id}/images", id: i32),
+                ("games/{id}/images/new", id: i32),
                 @file file,
             ) -> Vec<crate::images::Image>;
         }
@@ -257,7 +258,7 @@ macro_rules! declare_client {
             ) -> Result<$rtype, super::Error> {
                 let request = self.1
                     . $method (crate::routes::v1:: $fname ( &self.0, $( $path_name, )* ))
-                    $(.query( $query_name ))*
+                    $(.query( &$query_name ))*
                     $(.json( $body_name ))*
                 ;
 

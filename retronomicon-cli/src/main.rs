@@ -324,7 +324,6 @@ pub struct GamesListOpts {
 impl GamesListOpts {
     pub fn as_dto(&self) -> dto::games::GameListQueryParams {
         dto::games::GameListQueryParams {
-            paging: self.paging,
             system: self.system.clone(),
             year: self.year,
             name: self.name.clone(),
@@ -1073,7 +1072,11 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), Error> {
     match &game_opts.command {
         GamesCommand::List(list_opts) => output_json(
             client(opts)
-                .games(&list_opts.as_dto(), &list_opts.as_body_dto())
+                .games(
+                    &list_opts.as_dto(),
+                    &list_opts.paging,
+                    &list_opts.as_body_dto(),
+                )
                 .await?,
             opts,
         ),
@@ -1095,12 +1098,12 @@ async fn game(opts: &Opts, game_opts: &GamesOpts) -> Result<(), Error> {
                 let game_id = if let Some(g) = client
                     .games(
                         &dto::games::GameListQueryParams {
-                            paging: Default::default(),
                             system: Some(update_opts.system.clone()),
                             year: None,
                             name: None,
                             exact_name: Some(game.name.clone()),
                         },
+                        &Default::default(),
                         &Default::default(),
                     )
                     .await?

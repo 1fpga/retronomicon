@@ -6,27 +6,27 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct Paginated<T> {
     /// The total number of items in the database at the time of the request.
-    pub total: u64,
+    pub total: i64,
 
     /// The page requested. This may be different than the actual requested
     /// page if the requested page is out of bounds.
-    pub page: u64,
+    pub page: i64,
 
     /// The number of item per page. This should correspond to the number of
     /// items in the `items` field. This may be different than the requested
     /// number of items in the `items` field if the number of items requested
     /// is out of bounds or if the page has less items than requested.
-    pub per_page: u64,
+    pub per_page: i64,
 
     /// The number of pages total.
-    pub page_count: u64,
+    pub page_count: i64,
 
     /// The items requested.
     pub items: Vec<T>,
 }
 
 impl<T> Paginated<T> {
-    pub fn new(total: u64, page: u64, per_page: u64, items: Vec<T>) -> Self {
+    pub fn new(page: i64, per_page: i64, total: i64, items: Vec<T>) -> Self {
         let page_count = (total + per_page - 1) / per_page;
         Self {
             total,

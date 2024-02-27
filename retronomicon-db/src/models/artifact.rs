@@ -1,4 +1,5 @@
 use crate::models::{Core, CoreRelease, Platform, System, User};
+use crate::pages::Paginate;
 use crate::schema;
 use crate::Db;
 use chrono::NaiveDateTime;
@@ -203,14 +204,14 @@ impl Artifact {
         release: &CoreRelease,
         page: i64,
         limit: i64,
-    ) -> Result<Vec<Self>, diesel::result::Error> {
+    ) -> Result<(Vec<Self>, i64), diesel::result::Error> {
         schema::artifacts::table
             .inner_join(schema::core_release_artifacts::table)
             .filter(schema::core_release_artifacts::core_release_id.eq(release.id))
             .select(schema::artifacts::all_columns)
-            .offset(page * limit)
-            .limit(limit)
-            .load::<Self>(db)
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<Self>(db)
             .await
     }
 

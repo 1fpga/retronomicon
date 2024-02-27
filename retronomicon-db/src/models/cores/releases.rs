@@ -1,4 +1,5 @@
 use crate::models::{Core, Platform, System, User};
+use crate::pages::Paginate;
 use crate::schema;
 use crate::Db;
 use chrono::NaiveDateTime;
@@ -86,7 +87,7 @@ impl CoreRelease {
         page: i64,
         limit: i64,
         _filter: dto::cores::releases::CoreReleaseFilterParams<'_>,
-    ) -> Result<Vec<(Self, Platform, Core, User)>, diesel::result::Error> {
+    ) -> Result<(Vec<(Self, Platform, Core, User)>, i64), diesel::result::Error> {
         let mut query = schema::core_releases::table
             .inner_join(schema::platforms::table)
             .inner_join(schema::cores::table)
@@ -110,9 +111,9 @@ impl CoreRelease {
         }
 
         query
-            .offset(page * limit)
-            .limit(limit)
-            .load::<(Self, Platform, Core, User)>(db)
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<(Self, Platform, Core, User)>(db)
             .await
     }
 }

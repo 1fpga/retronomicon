@@ -1,5 +1,4 @@
 use crate::cores::releases::CoreReleaseRef;
-use crate::params::PagingParams;
 use crate::systems::SystemRef;
 use crate::teams::TeamRef;
 use crate::types::IdOrSlug;
@@ -28,15 +27,6 @@ pub struct CoreListQueryParams<'v> {
 
     /// Filter by latest release date. By default, include all cores.
     pub release_date_ge: Option<i64>,
-
-    #[serde(flatten)]
-    pub paging: PagingParams,
-}
-
-impl<'v> CoreListQueryParams<'v> {
-    pub fn paging(&self) -> PagingParams {
-        self.paging
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

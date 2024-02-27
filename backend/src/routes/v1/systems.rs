@@ -37,7 +37,7 @@ pub async fn systems_list(
 }
 
 #[openapi(tag = "Systems", ignore = "db")]
-#[post("/systems", format = "application/json", data = "<form>")]
+#[post("/systems/new", format = "application/json", data = "<form>")]
 pub async fn systems_create(
     mut db: Db,
     user: guards::users::AuthenticatedUserGuard,

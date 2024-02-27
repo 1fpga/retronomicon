@@ -18,6 +18,16 @@ use serde_json::{json, Value as Json};
 use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
+#[derive(AsChangeset)]
+#[diesel(table_name = schema::teams)]
+struct TeamUpdate<'a> {
+    slug: Option<&'a str>,
+    name: Option<&'a str>,
+    description: Option<&'a str>,
+    links: Option<Json>,
+    metadata: Option<Json>,
+}
+
 #[derive(Queryable, Debug, Identifiable, Selectable, Serialize)]
 #[diesel(table_name = schema::teams)]
 pub struct Team {
@@ -117,16 +127,6 @@ impl Team {
         links: Option<Json>,
         metadata: Option<Json>,
     ) -> Result<(), diesel::result::Error> {
-        #[derive(AsChangeset)]
-        #[diesel(table_name = schema::teams)]
-        struct TeamUpdate<'a> {
-            slug: Option<&'a str>,
-            name: Option<&'a str>,
-            description: Option<&'a str>,
-            links: Option<Json>,
-            metadata: Option<Json>,
-        }
-
         diesel::update(schema::teams::table)
             .filter(schema::teams::id.eq(id))
             .set(&TeamUpdate {
