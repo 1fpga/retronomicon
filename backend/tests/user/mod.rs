@@ -397,11 +397,11 @@ impl User {
     pub async fn get_game_images(
         &mut self,
         game_id: i32,
-    ) -> Result<Vec<dto::images::Image>, Error> {
+    ) -> Result<dto::Paginated<dto::images::Image>, Error> {
         self.get(
             uri!(v1::games::games_images(
                 game_id as u32,
-                dto::games::GameImageListQueryParams::default()
+                dto::params::PagingParams::default()
             )),
             &(),
         )

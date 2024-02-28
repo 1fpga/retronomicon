@@ -240,6 +240,7 @@ async fn then_user_can_see(w: &mut World, user: UserParam, image: String, game: 
     let result = user.lock().await.get_game_images(game_id).await.unwrap();
 
     let i = result
+        .items
         .iter()
         .find(|i| i.name == format!("{image}.png"))
         .expect("Image not in the list of images.");
