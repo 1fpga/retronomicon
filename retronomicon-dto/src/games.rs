@@ -1,6 +1,6 @@
 use crate::artifact::ArtifactRef;
 use crate::encodings::HexString;
-use crate::params::{PagingParams, RangeParams};
+use crate::params::RangeParams;
 use crate::systems::SystemRef;
 use crate::types::IdOrSlug;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 /// Parameters for filtering the list of games.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct GameListQueryParams<'v> {
@@ -21,10 +21,6 @@ pub struct GameListQueryParams<'v> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub year: Option<RangeParams<i32>>,
 
-    /// Paging parameters.
-    #[serde(flatten)]
-    pub paging: PagingParams,
-
     /// Filter by name, exact substring. If both name and exact_name are specified,
     /// they will both try to match and may give no result.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -34,17 +30,6 @@ pub struct GameListQueryParams<'v> {
     /// they will both try to match and may give no result.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exact_name: Option<String>,
-}
-
-/// Parameters for filtering the list of game images.
-#[derive(Default, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
-#[cfg_attr(feature = "rocket", derive(rocket::UriDisplayQuery))]
-#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
-pub struct GameImageListQueryParams {
-    /// Paging parameters.
-    #[serde(flatten)]
-    pub paging: PagingParams,
 }
 
 /// Parameters for filtering the list of games using checksums.

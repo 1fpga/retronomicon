@@ -26,13 +26,18 @@ pub async fn cores_releases_list(
     core_id: dto::types::IdOrSlug<'_>,
     paging: dto::params::PagingParams,
     filter: dto::cores::releases::CoreReleaseFilterParams<'_>,
-) -> Result<Json<Vec<dto::cores::releases::CoreReleaseListItem>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::cores::releases::CoreReleaseListItem>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    Ok(Json(
-        models::CoreRelease::list(&mut db, core_id, page, limit, filter)
-            .await
-            .map_err(|e| (Status::InternalServerError, e.to_string()))?
+    let (items, total) = models::CoreRelease::list(&mut db, core_id, page, limit, filter)
+        .await
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(dto::Paginated::new(
+        page,
+        limit,
+        total,
+        items
             .into_iter()
             .map(
                 |(release, platform, core, uploader)| dto::cores::releases::CoreReleaseListItem {
@@ -46,13 +51,13 @@ pub async fn cores_releases_list(
                 },
             )
             .collect(),
-    ))
+    )))
 }
 
 /// Create a release for a core. This does not include any artifacts, which
 /// must be uploaded separately.
 #[openapi(tag = "Core Releases", ignore = "db")]
-#[post("/cores/<core_id>/releases", format = "json", data = "<input>")]
+#[post("/cores/<core_id>/releases/new", format = "json", data = "<input>")]
 pub async fn cores_releases_create(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,
@@ -191,13 +196,13 @@ pub async fn cores_releases_artifacts_download_filename(
 
 /// Get a release's artifact list, including everything except the data itself.
 #[openapi(tag = "Core Releases", ignore = "db")]
-#[get("/cores/<core_id>/releases/<release_id>/artifacts?<paging>")]
+#[get("/cores/<core_id>/releases/<release_id>/artifacts?<paging..>")]
 pub async fn cores_releases_artifacts_list(
     mut db: Db,
     core_id: dto::types::IdOrSlug<'_>,
     release_id: u32,
     paging: dto::params::PagingParams,
-) -> Result<Json<Vec<dto::artifact::CoreReleaseArtifactListItem>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::artifact::CoreReleaseArtifactListItem>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
     let release = models::CoreRelease::from_id(&mut db, release_id as i32)
@@ -207,13 +212,15 @@ pub async fn cores_releases_artifacts_list(
 
     let core = models::Core::from_id_or_slug(&mut db, core_id).await?;
 
-    let artifacts = models::Artifact::list(&mut db, &release, page, limit)
+    let (items, total) = models::Artifact::list(&mut db, &release, page, limit)
         .await
         .map_err(|e| (Status::InternalServerError, e.to_string()))?;
-    rocket::info!("artifacts: {:?}", artifacts);
 
-    Ok(Json(
-        artifacts
+    Ok(Json(dto::Paginated::new(
+        page,
+        limit,
+        total,
+        items
             .into_iter()
             .map(|artifact| {
                 let download_url = artifact.download_url.clone().unwrap_or_else(|| {
@@ -240,7 +247,7 @@ pub async fn cores_releases_artifacts_list(
                 }
             })
             .collect(),
-    ))
+    )))
 }
 
 async fn upload_single_artifact(
@@ -300,7 +307,10 @@ async fn upload_single_artifact(
 /// The upload will be refused if the user does not have permission to
 /// upload artifacts to the release's core.
 #[openapi(tag = "Core Releases", ignore = "db", ignore = "storage")]
-#[post("/cores/<core_id>/releases/<release_id>/artifacts", data = "<file>")]
+#[post(
+    "/cores/<core_id>/releases/<release_id>/artifacts/new",
+    data = "<file>"
+)]
 pub async fn cores_releases_artifacts_upload(
     mut db: Db,
     admin: guards::users::AuthenticatedUserGuard,

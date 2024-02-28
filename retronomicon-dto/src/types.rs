@@ -105,6 +105,13 @@ impl<'v> IdOrSlug<'v> {
             _ => None,
         }
     }
+
+    pub fn reduce<R>(self, f_id: impl FnOnce(i32) -> R, f_slug: impl FnOnce(&str) -> R) -> R {
+        match self {
+            IdOrSlug::Id(id) => f_id(id),
+            IdOrSlug::Slug(slug) => f_slug(slug.as_ref()),
+        }
+    }
 }
 
 #[cfg(feature = "rocket")]

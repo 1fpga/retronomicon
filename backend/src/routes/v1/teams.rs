@@ -58,7 +58,7 @@ pub async fn teams_details(
 
 /// Create a new team, and make the current user its owner.
 #[openapi(tag = "Teams", ignore = "db")]
-#[post("/teams", data = "<form>")]
+#[post("/teams/new", data = "<form>")]
 pub async fn teams_create(
     mut db: Db,
     owner: AuthenticatedUserGuard,
@@ -184,7 +184,7 @@ pub async fn teams_delete(
 }
 
 #[openapi(tag = "Teams", ignore = "db")]
-#[post("/teams/<team_id>/invitation", data = "<form>")]
+#[post("/teams/<team_id>/invite", data = "<form>")]
 pub async fn invite(
     mut db: Db,
     admin: AuthenticatedUserGuard,

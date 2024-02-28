@@ -1,5 +1,4 @@
 use crate::cores::releases::CoreReleaseRef;
-use crate::params::PagingParams;
 use crate::systems::SystemRef;
 use crate::teams::TeamRef;
 use crate::types::IdOrSlug;
@@ -10,7 +9,7 @@ use std::collections::BTreeMap;
 pub mod releases;
 
 /// Parameters for filtering the list of cores.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "rocket", derive(rocket::form::FromForm))]
 #[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
 pub struct CoreListQueryParams<'v> {
@@ -28,15 +27,6 @@ pub struct CoreListQueryParams<'v> {
 
     /// Filter by latest release date. By default, include all cores.
     pub release_date_ge: Option<i64>,
-
-    #[serde(flatten)]
-    pub paging: PagingParams,
-}
-
-impl<'v> CoreListQueryParams<'v> {
-    pub fn paging(&self) -> PagingParams {
-        self.paging
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

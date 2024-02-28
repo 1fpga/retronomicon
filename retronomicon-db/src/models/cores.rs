@@ -1,14 +1,15 @@
-use crate::models::{Platform, System, Team};
 use crate::types::FromIdOrSlug;
 use crate::Db;
 use crate::{models, schema};
+use diesel::dsl::count_star;
 use diesel::prelude::*;
+use diesel::query_builder::BoxedSelectStatement;
 use diesel::{AsExpression, FromSqlRow, Identifiable, Queryable};
-use retronomicon_dto as dto;
 use rocket_db_pools::diesel::{AsyncConnection, RunQueryDsl};
 use serde_json::Value as Json;
 
 mod releases;
+use crate::pages::{Paginate, Paginated};
 pub use releases::*;
 
 #[derive(Queryable, Debug, Identifiable)]
@@ -75,23 +76,26 @@ impl Core {
             .await
     }
 
-    pub async fn list_with_teams_and_releases(
-        db: &mut Db,
+    pub async fn list_with_teams_and_releases<'a>(
+        db: &'a mut Db,
         page: i64,
         limit: i64,
-        platform: Option<&Platform>,
-        system: Option<&System>,
-        team: Option<&Team>,
+        platform: Option<i32>,
+        system: Option<i32>,
+        team: Option<i32>,
         release_date_ge: Option<chrono::NaiveDateTime>,
     ) -> Result<
-        Vec<(
-            Self,
-            models::System,
-            models::Team,
-            Option<models::CoreRelease>,
-            models::Platform,
-        )>,
-        diesel::result::Error,
+        (
+            Vec<(
+                Self,
+                models::System,
+                models::Team,
+                Option<CoreRelease>,
+                models::Platform,
+            )>,
+            i64,
+        ),
+        String,
     > {
         let mut query = schema::cores::table
             .inner_join(schema::teams::table)
@@ -114,42 +118,40 @@ impl Core {
                     .on(schema::platforms::id.eq(schema::core_releases::platform_id)),
             )
             .inner_join(schema::systems::table)
+            .select((
+                schema::cores::all_columns,
+                schema::systems::all_columns,
+                schema::teams::all_columns,
+                schema::core_releases::all_columns.nullable(),
+                schema::platforms::all_columns,
+            ))
             .into_boxed();
 
         if let Some(platform) = platform {
-            query = query.filter(schema::platforms::id.eq(platform.id));
+            query = query.filter(schema::platforms::id.eq(platform));
         }
-
         if let Some(system) = system {
-            query = query.filter(schema::systems::id.eq(system.id));
+            query = query.filter(schema::systems::id.eq(system));
         }
-
         if let Some(team) = team {
-            query = query.filter(schema::teams::id.eq(team.id));
+            query = query.filter(schema::teams::id.eq(team));
         }
-
         if let Some(release_date_ge) = release_date_ge {
             query = query.filter(schema::core_releases::date_released.ge(release_date_ge));
         }
 
         query
-            .select((
-                schema::cores::all_columns,
-                schema::systems::all_columns,
-                schema::teams::all_columns,
-                Option::<models::CoreRelease>::as_select(),
-                schema::platforms::all_columns,
-            ))
-            .offset(page * limit)
-            .limit(limit)
-            .load::<(
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<(
                 Self,
                 models::System,
                 models::Team,
-                Option<models::CoreRelease>,
+                Option<CoreRelease>,
                 models::Platform,
             )>(db)
             .await
+            .map_err(|e| e.to_string())
     }
 
     pub async fn create(
@@ -179,22 +181,25 @@ impl Core {
 
     pub async fn get_with_owner_and_system(
         db: &mut Db,
-        id: dto::types::IdOrSlug<'_>,
+        id: i32,
     ) -> Result<Option<(Self, models::Team, models::System)>, diesel::result::Error> {
-        let mut query = schema::cores::table
+        schema::cores::table
             .inner_join(schema::teams::table)
             .inner_join(schema::systems::table)
-            .into_boxed();
+            .filter(schema::cores::id.eq(id))
+            .first::<(Self, models::Team, models::System)>(db)
+            .await
+            .optional()
+    }
 
-        if let Some(id) = id.as_id() {
-            query = query.filter(schema::cores::id.eq(id));
-        } else if let Some(slug) = id.as_slug() {
-            query = query.filter(schema::cores::slug.eq(slug));
-        } else {
-            return Ok(None);
-        }
-
-        query
+    pub async fn get_by_slug_with_owner_and_system(
+        db: &mut Db,
+        slug: &str,
+    ) -> Result<Option<(Self, models::Team, models::System)>, diesel::result::Error> {
+        schema::cores::table
+            .inner_join(schema::teams::table)
+            .inner_join(schema::systems::table)
+            .filter(schema::cores::slug.eq(slug))
             .first::<(Self, models::Team, models::System)>(db)
             .await
             .optional()

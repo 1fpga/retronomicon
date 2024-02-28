@@ -25,7 +25,7 @@ pub async fn tags(
 
 /// Create or update a tag.
 #[openapi(tag = "Tags", ignore = "db")]
-#[post("/tags", data = "<tag>")]
+#[post("/tags/new", data = "<tag>")]
 pub async fn tags_create(
     mut db: Db,
     _user: guards::users::RootUserGuard,

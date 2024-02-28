@@ -23,7 +23,18 @@ use std::fmt::{Debug, Formatter};
 use std::io::Write;
 
 mod password;
+use crate::pages::Paginate;
 pub use password::*;
+
+#[derive(AsChangeset)]
+#[diesel(table_name = schema::users)]
+struct UserSignupChangeset<'a> {
+    username: Option<&'a str>,
+    display_name: Option<&'a str>,
+    description: Option<&'a str>,
+    links: Option<Json>,
+    metadata: Option<Json>,
+}
 
 #[derive(Clone, Debug, Queryable, Identifiable, Selectable)]
 #[diesel(table_name = schema::users)]
@@ -178,11 +189,12 @@ impl User {
         db: &mut Db,
         page: i64,
         limit: i64,
-    ) -> Result<Vec<Self>, diesel::result::Error> {
+    ) -> Result<(Vec<Self>, i64), diesel::result::Error> {
         schema::users::table
-            .offset(page * limit)
-            .limit(limit)
-            .load::<Self>(db)
+            .select(schema::users::all_columns)
+            .paginate(page)
+            .per_page(limit)
+            .load_and_count_total::<Self>(db)
             .await
     }
 
@@ -267,16 +279,6 @@ impl User {
         db: &mut Db,
         form: dto::user::UserUpdate<'_>,
     ) -> Result<(), diesel::result::Error> {
-        #[derive(AsChangeset)]
-        #[diesel(table_name = schema::users)]
-        struct UserSignupChangeset<'a> {
-            username: Option<&'a str>,
-            display_name: Option<&'a str>,
-            description: Option<&'a str>,
-            links: Option<Json>,
-            metadata: Option<Json>,
-        }
-
         db.transaction(|db| {
             async move {
                 let mut changeset = UserSignupChangeset {

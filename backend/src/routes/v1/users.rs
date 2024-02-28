@@ -34,13 +34,19 @@ pub async fn check_username(
 pub async fn users(
     mut db: Db,
     paging: dto::params::PagingParams,
-) -> Result<Json<Vec<dto::user::User>>, (Status, String)> {
+) -> Result<Json<dto::Paginated<dto::user::User>>, (Status, String)> {
     let (page, limit) = paging.validate().map_err(|e| (Status::BadRequest, e))?;
 
-    User::list(&mut db, page, limit)
+    let (items, total) = User::list(&mut db, page, limit)
         .await
-        .map_err(|e| (Status::InternalServerError, e.to_string()))
-        .map(|u| Json(u.into_iter().map(Into::into).collect()))
+        .map_err(|e| (Status::InternalServerError, e.to_string()))?;
+
+    Ok(Json(dto::Paginated::new(
+        page,
+        limit,
+        total,
+        items.into_iter().map(Into::into).collect(),
+    )))
 }
 
 #[openapi(tag = "Users", ignore = "db")]

@@ -28,3 +28,11 @@ pub struct LoginRequest<'a> {
     pub email: &'a str,
     pub password: &'a str,
 }
+
+/// A JWT authentication token.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "openapi", derive(schemars::JsonSchema))]
+pub struct TokenResponse {
+    /// The token itself.
+    pub token: String,
+}

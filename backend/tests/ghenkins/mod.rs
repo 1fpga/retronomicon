@@ -11,9 +11,9 @@ impl FromStr for TeamRole {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(s.parse().map_err(
-            |e: dto::reexports::strum::ParseError| e.to_string(),
-        )?))
+        dto::types::UserTeamRole::from_str(s)
+            .map(Self)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -240,6 +240,7 @@ async fn then_user_can_see(w: &mut World, user: UserParam, image: String, game: 
     let result = user.lock().await.get_game_images(game_id).await.unwrap();
 
     let i = result
+        .items
         .iter()
         .find(|i| i.name == format!("{image}.png"))
         .expect("Image not in the list of images.");

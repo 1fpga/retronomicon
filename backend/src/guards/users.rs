@@ -34,7 +34,7 @@ impl<'r> request::FromRequest<'r> for RootUserGuard {
         let user = match request.guard::<UserGuard>().await {
             Outcome::Success(user) => user,
             Outcome::Forward(_) => return Outcome::Forward(Status::Unauthorized),
-            Outcome::Error((status, _)) => return Outcome::Error((status, "Unauthorized".into())),
+            Outcome::Error(e) => return Outcome::Error(e),
         };
 
         let result = UserTeam::user_is_in_team(&mut db, user.id, config.root_team_id)
@@ -143,7 +143,7 @@ impl<'r> request::FromRequest<'r> for UserGuard {
                 serde_json::from_str(cookie.value()).map_err(|e| e.to_string());
 
             return json
-                .or_error(Status::Unauthorized)
+                .or_forward(Status::Unauthorized)
                 .and_then(validate_exp)
                 .and_then(|user: UserGuard| {
                     user.update_cookie(cookies);
@@ -163,7 +163,7 @@ impl<'r> request::FromRequest<'r> for UserGuard {
             .get_one("Authorization")
             .ok_or("Unauthorized".to_string())
             .and_then(|key| UserGuard::decode_jwt(key, jwt_secret).map_err(|e| e.to_string()))
-            .or_error(Status::Unauthorized)
+            .or_forward(Status::Unauthorized)
             .and_then(validate_exp)
     }
 }
